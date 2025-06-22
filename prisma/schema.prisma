@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  rut       String   @unique
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  createdJustifications  Justification[] @relation("CreatedBy")
+  reviewedJustifications Justification[] @relation("ReviewedBy")
+}
+
+model Justification {
+  id                String              @id @default(uuid())
+
+  // Datos del trabajador justificado (no es relación con User)
+  employeeName      String
+  employeeRut       String
+  employeeEmail     String
+  employeeSapCode   String
+  employeeGerencia  String?
+
+  // Información de la justificación
+  startDate         DateTime
+  endDate           DateTime
+  type              JustificationType
+  description       String?
+  documentUrl       String?
+  status            JustificationStatus @default(PENDING)
+  reviewedAt        DateTime?
+
+  // Relación con el usuario que crea la justificación
+  creatorId         String
+  creator           User                @relation("CreatedBy", fields: [creatorId], references: [id])
+
+  // Relación con el revisor (opcional)
+  reviewerId        String?
+  reviewer          User?               @relation("ReviewedBy", fields: [reviewerId], references: [id])
+  reviewerCause     String?  // Nueva causa asignada por el revisor
+  reviewerComment   String?  // Observación o comentario del revisor
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum JustificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum JustificationType {
+  VACATION
+  COMISION
+  ACTIVIDAD
+  MEDICAL
+  LEGAL
+  OTHER
+}

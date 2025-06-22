@@ -1,0 +1,41 @@
+{
+  "name": "liderazgo",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "generate": "prisma generate",
+    "migrate": "prisma migrate dev --name init",
+    "test": "jest"
+  },
+
+  "prisma": {
+  "seed": "node scripts/seed.js"
+},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@faker-js/faker": "^9.8.0",
+    "@prisma/client": "^6.9.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "module-alias": "^2.2.3"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.10",
+    "prisma": "^6.9.0",
+    "supertest": "^7.1.1"
+  },
+  "_moduleAliases": {
+    "@": ".",
+    "@src": "src",
+    "@services": "src/services",
+    "@controllers": "src/controllers",
+    "@middlewares": "src/middlewares",
+    "@routes": "src/routes",
+    "@db": "src/db"
+  }
+}
