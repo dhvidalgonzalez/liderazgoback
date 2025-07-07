@@ -25,12 +25,12 @@ model User {
 model Justification {
   id                String              @id @default(uuid())
 
-  // Datos del trabajador justificado (no es relación con User)
+  // Datos estáticos del trabajador justificado
   employeeName      String
   employeeRut       String
   employeeEmail     String
-  employeeSapCode   String
-  employeeGerencia  String?
+  employeeSapCode   String?            // Opcional
+  employeeGerencia  String?            // Opcional
 
   // Información de la justificación
   startDate         DateTime
@@ -41,19 +41,21 @@ model Justification {
   status            JustificationStatus @default(PENDING)
   reviewedAt        DateTime?
 
-  // Relación con el usuario que crea la justificación
+  // Usuario que crea la justificación (requiere login)
   creatorId         String
   creator           User                @relation("CreatedBy", fields: [creatorId], references: [id])
 
-  // Relación con el revisor (opcional)
+  // Usuario revisor (opcional)
   reviewerId        String?
   reviewer          User?               @relation("ReviewedBy", fields: [reviewerId], references: [id])
-  reviewerCause     String?  // Nueva causa asignada por el revisor
-  reviewerComment   String?  // Observación o comentario del revisor
+  reviewerCause     String?
+  reviewerComment   String?
 
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 }
+
+
 
 enum Role {
   USER

@@ -1,7 +1,8 @@
 const prisma = require("../../db/client");
 
-async function listJustificationsService() {
+async function listJustificationsService(creatorId) {
   return await prisma.justification.findMany({
+    where: { creatorId }, // 👈 aplica el filtro
     orderBy: { createdAt: "desc" },
   });
 }
@@ -13,6 +14,7 @@ async function getJustificationService(id) {
 }
 
 async function createJustificationService(data) {
+  console.log("🚀 ~ createJustificationService ~ data:", data);
   return await prisma.justification.create({
     data,
   });

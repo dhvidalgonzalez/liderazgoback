@@ -8,8 +8,14 @@ const {
 
 async function list(req, res, next) {
   try {
-    const justifications = await listJustificationsService();
-    console.log("🚀 ~ list ~ justifications:", justifications);
+    const { creatorId } = req.query;
+
+    if (!creatorId) {
+      return res.status(400).json({ error: "Falta el parámetro creatorId" });
+    }
+
+    const justifications = await listJustificationsService(creatorId); // 👈 pasa el ID
+
     res.json(justifications);
   } catch (err) {
     next(err);
@@ -28,11 +34,27 @@ async function get(req, res, next) {
 
 async function create(req, res, next) {
   try {
+    const file = req.file;
+    const documentUrl = file ? `/uploads/${file.filename}` : null;
+    console.log("🚀 ~ create ~ req.body:", req.body);
+    // ✅ Parsea fechas manualmente si existen
+    const { file: _, startDate, endDate, ...rest } = req.body;
+
+    const parsedStartDate = startDate ? new Date(startDate) : null;
+    const parsedEndDate = endDate ? new Date(endDate) : null;
+
+    // 🔍 Valida si son fechas válidas
+    if (isNaN(parsedStartDate) || isNaN(parsedEndDate)) {
+      return res.status(400).json({ error: "Fechas inválidas" });
+    }
+
     const data = {
-      ...req.body,
-      startDate: new Date(req.body.startDate),
-      endDate: new Date(req.body.endDate),
+      ...rest,
+      startDate: parsedStartDate,
+      endDate: parsedEndDate,
+      documentUrl,
     };
+
     const justification = await createJustificationService(data);
     res.status(201).json(justification);
   } catch (err) {

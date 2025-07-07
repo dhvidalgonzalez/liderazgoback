@@ -9,9 +9,11 @@ const {
 
 const router = express.Router();
 
+const upload = require("../../middlewares/upload");
+
 router.get("/", list); // GET /justifications
 router.get("/:id", get); // GET /justifications/:id
-router.post("/", create); // POST /justifications
+router.post("/", upload.single("file"), create); // POST /justifications
 router.put("/:id/status", update); // PUT /justifications/:id/status
 router.delete("/:id", remove); // DELETE /justifications/:id
 

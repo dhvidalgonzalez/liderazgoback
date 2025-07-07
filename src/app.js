@@ -1,7 +1,8 @@
 require("module-alias/register");
 
 const express = require("express");
-const cors = require("cors"); // ✅ Importa CORS
+const cors = require("cors");
+const path = require("path"); // ✅ Importa path para archivos estáticos
 const routes = require("./routes");
 const { errorHandler } = require("./middlewares/errorHandler");
 
@@ -15,12 +16,16 @@ app.use(
   })
 );
 
+// ✅ Permite recibir JSON
 app.use(express.json());
 
-// Todas las rutas agrupadas bajo /api
+// ✅ Sirve archivos estáticos desde /uploads
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// ✅ Agrupa las rutas bajo /api
 app.use("/api", routes);
 
-// Middleware para manejar errores
+// ✅ Middleware de manejo de errores
 app.use(errorHandler);
 
 module.exports = app;
