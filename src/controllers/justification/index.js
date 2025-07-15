@@ -8,7 +8,7 @@ const {
 
 async function list(req, res, next) {
   try {
-    const { creatorId } = req.query;
+    const  creatorId  = req.user.userId;
 
     if (!creatorId) {
       return res.status(400).json({ error: "Falta el parámetro creatorId" });
@@ -36,24 +36,24 @@ async function create(req, res, next) {
   try {
     const file = req.file;
     const documentUrl = file ? `/uploads/${file.filename}` : null;
-    console.log("🚀 ~ create ~ req.body:", req.body);
-    // ✅ Parsea fechas manualmente si existen
     const { file: _, startDate, endDate, ...rest } = req.body;
 
     const parsedStartDate = startDate ? new Date(startDate) : null;
     const parsedEndDate = endDate ? new Date(endDate) : null;
 
-    // 🔍 Valida si son fechas válidas
     if (isNaN(parsedStartDate) || isNaN(parsedEndDate)) {
       return res.status(400).json({ error: "Fechas inválidas" });
     }
 
+    // 👇 Inyecta el ID del usuario autenticado desde el token
     const data = {
       ...rest,
       startDate: parsedStartDate,
       endDate: parsedEndDate,
       documentUrl,
+      creatorId: req.user.userId,
     };
+    console.log("🚀 ~ create ~ data.eq.user.userId:", req.user.userId)
 
     const justification = await createJustificationService(data);
     res.status(201).json(justification);
@@ -61,6 +61,7 @@ async function create(req, res, next) {
     next(err);
   }
 }
+
 
 async function update(req, res, next) {
   try {

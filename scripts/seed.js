@@ -26,7 +26,7 @@ async function main() {
     for (let j = 1; j <= 10; j++) {
       const justification = await prisma.justification.create({
         data: {
-          employeeName: faker.person.fullName(),
+          employeeNombre: faker.person.fullName(),
           employeeRut:
             faker.string.uuid().slice(0, 8) +
             "-" +

@@ -13,11 +13,12 @@ CREATE TABLE "User" (
 -- CreateTable
 CREATE TABLE "Justification" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "employeeName" TEXT NOT NULL,
+    "employeeNombre" TEXT NOT NULL,
     "employeeRut" TEXT NOT NULL,
     "employeeEmail" TEXT NOT NULL,
-    "employeeSapCode" TEXT NOT NULL,
+    "employeeSapCode" TEXT,
     "employeeGerencia" TEXT,
+    "employeeEmpresa" TEXT,
     "startDate" DATETIME NOT NULL,
     "endDate" DATETIME NOT NULL,
     "type" TEXT NOT NULL,
@@ -27,6 +28,8 @@ CREATE TABLE "Justification" (
     "reviewedAt" DATETIME,
     "creatorId" TEXT NOT NULL,
     "reviewerId" TEXT,
+    "reviewerCause" TEXT,
+    "reviewerComment" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     CONSTRAINT "Justification_creatorId_fkey" FOREIGN KEY ("creatorId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,

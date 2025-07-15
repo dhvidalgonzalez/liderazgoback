@@ -1,4 +1,3 @@
-// controllers/admin/justification.js
 const {
   listJustificationsService,
   getJustificationService,
@@ -7,7 +6,13 @@ const {
 
 async function list(req, res, next) {
   try {
-    const { type, status, createdAtStart, createdAtEnd, search } = req.query;
+    const {
+      type,
+      status,
+      createdAtStart,
+      createdAtEnd,
+      search,
+    } = req.body;
 
     const filters = {
       type: type || null,
@@ -18,6 +23,7 @@ async function list(req, res, next) {
     };
 
     const justifications = await listJustificationsService(filters);
+    console.log("🚀 ~ list ~ justifications:", justifications)
     res.json(justifications);
   } catch (err) {
     next(err);
@@ -37,12 +43,19 @@ async function get(req, res, next) {
 async function update(req, res, next) {
   try {
     const { id } = req.params;
-    const { status, reviewerId } = req.body;
+    const { status, reviewerComment, reviewerCause } = req.body;
+
+    const reviewerId = req.user.userId;
+
+
     const justification = await updateJustificationStatusService(
       id,
       status,
-      reviewerId
+      reviewerId,
+      reviewerComment,
+      reviewerCause
     );
+
     res.json(justification);
   } catch (err) {
     next(err);

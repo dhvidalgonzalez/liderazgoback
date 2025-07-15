@@ -110,10 +110,30 @@ async function deleteUserService(id) {
   });
 }
 
+async function getOrCreateUserService({ rut, name }) {
+  let user = await prisma.user.findUnique({ where: { rut } });
+
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        rut,
+        name,
+        email: "", // correo falso por ahora
+        password: "placeholder",            // si es requerido
+        role: "USER"
+      },
+    });
+  }
+
+  return user;
+}
+
+
 module.exports = {
   listUsersService,
   getUserService,
   createUserService,
   updateUserService,
   deleteUserService,
+  getOrCreateUserService,
 };

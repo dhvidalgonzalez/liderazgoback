@@ -7,7 +7,7 @@ const {
 
 const router = express.Router();
 
-router.get("/", list); // GET /admin/justifications con filtros
+router.post("/", list); // GET /admin/justifications con filtros
 router.get("/:id", get); // GET /admin/justifications/:id
 router.put("/:id/status", update); // PUT /admin/justifications/:id/status
 

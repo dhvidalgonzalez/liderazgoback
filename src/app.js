@@ -1,31 +1,54 @@
+require("dotenv").config();
 require("module-alias/register");
 
 const express = require("express");
 const cors = require("cors");
-const path = require("path"); // ✅ Importa path para archivos estáticos
+const path = require("path");
+const cookieParser = require("cookie-parser");
+
 const routes = require("./routes");
 const { errorHandler } = require("./middlewares/errorHandler");
 
 const app = express();
 
-// ✅ Habilita CORS para el frontend en localhost:3003
+// 🧁 Parse cookies
+app.use(cookieParser());
+
+// 🌐 CORS
 app.use(
   cors({
     origin: "http://localhost:3003",
-    credentials: true, // si necesitas enviar cookies o headers de autenticación
+    credentials: true,
   })
 );
 
-// ✅ Permite recibir JSON
+// 🧠 JSON parsing
 app.use(express.json());
 
-// ✅ Sirve archivos estáticos desde /uploads
+// 🧾 Log
+app.use((req, res, next) => {
+  console.log("📥 Solicitud recibida:");
+  console.log(`➡️ ${req.method} ${req.originalUrl}`);
+  next();
+});
+
+// 📂 Static files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// ✅ Agrupa las rutas bajo /api
+// 🧭 Ruta de prueba
+app.get("/api/test", (req, res) => {
+  res.json({ mensaje: "Backend responde correctamente" });
+});
+
+// ✅ Usa rutas con lógica protegida dentro
 app.use("/api", routes);
 
-// ✅ Middleware de manejo de errores
+// ❌ Not Found
+app.use((req, res) => {
+  res.status(404).json({ error: "Ruta no encontrada" });
+});
+
+// 🛠 Error handler
 app.use(errorHandler);
 
 module.exports = app;

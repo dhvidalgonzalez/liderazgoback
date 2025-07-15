@@ -26,11 +26,12 @@ model Justification {
   id                String              @id @default(uuid())
 
   // Datos estáticos del trabajador justificado
-  employeeName      String
+  employeeNombre      String
   employeeRut       String
   employeeEmail     String
   employeeSapCode   String?            // Opcional
   employeeGerencia  String?            // Opcional
+  employeeEmpresa   String?
 
   // Información de la justificación
   startDate         DateTime
