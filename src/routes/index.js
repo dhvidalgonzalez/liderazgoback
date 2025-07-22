@@ -4,6 +4,7 @@ const justificationRoutes = require("./justification");
 const adminJustificationRoutes = require("./admin/justification");
 const loginRoutes = require("./login");
 const trabajadorRoutes = require("./trabajador");
+const employeeProfileRoutes = require("./admin/employeeProfile"); // ✅ nuevo import
 
 const verifyJWT = require("../middlewares/authentication");
 
@@ -18,7 +19,9 @@ router.use(verifyJWT);
 // 🔐 Rutas protegidas (requieren token JWT válido)
 router.use("/user", userRoutes);
 router.use("/justification", justificationRoutes);
-router.use("/admin/justification", adminJustificationRoutes);
 router.use("/trabajador", trabajadorRoutes);
+
+router.use("/admin/justification", adminJustificationRoutes);
+router.use("/admin/employee-profiles", employeeProfileRoutes); // ✅ nueva ruta protegida
 
 module.exports = router;

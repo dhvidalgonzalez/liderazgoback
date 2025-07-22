@@ -36,7 +36,16 @@ async function create(req, res, next) {
   try {
     const file = req.file;
     const documentUrl = file ? `/uploads/${file.filename}` : null;
-    const { file: _, startDate, endDate, ...rest } = req.body;
+
+    const {
+      file: _,
+      startDate,
+      endDate,
+      employeeProfileId,
+      employeePosition,
+      ...rest
+    } = req.body;
+      console.log("🚀 ~ create ~ rest:", req.body)
 
     const parsedStartDate = startDate ? new Date(startDate) : null;
     const parsedEndDate = endDate ? new Date(endDate) : null;
@@ -45,15 +54,19 @@ async function create(req, res, next) {
       return res.status(400).json({ error: "Fechas inválidas" });
     }
 
-    // 👇 Inyecta el ID del usuario autenticado desde el token
     const data = {
       ...rest,
+      employeePosition: employeePosition,
       startDate: parsedStartDate,
       endDate: parsedEndDate,
       documentUrl,
-      creatorId: req.user.userId,
+      creator: {
+        connect: { id: req.user.userId }, // ✅ NO uses creatorId directamente
+      },
+      employeeProfile: {
+        connect: { id: employeeProfileId },
+      },
     };
-    console.log("🚀 ~ create ~ data.eq.user.userId:", req.user.userId)
 
     const justification = await createJustificationService(data);
     res.status(201).json(justification);
@@ -61,6 +74,11 @@ async function create(req, res, next) {
     next(err);
   }
 }
+
+
+
+
+
 
 
 async function update(req, res, next) {

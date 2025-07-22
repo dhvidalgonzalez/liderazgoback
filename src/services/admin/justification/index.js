@@ -17,7 +17,7 @@ async function listJustificationsService(filters = {}) {
 
   if (search) {
     where.OR = [
-      { employeeNombre: { contains: search, mode: "insensitive" } },
+      { employeeName: { contains: search, mode: "insensitive" } },
       { employeeRut: { contains: search, mode: "insensitive" } },
     ];
   }

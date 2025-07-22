@@ -22,16 +22,37 @@ model User {
   reviewedJustifications Justification[] @relation("ReviewedBy")
 }
 
+model EmployeeProfile {
+  id             String           @id @default(uuid())
+  rut            String           @unique
+  name           String           // Nombre completo del empleado
+  email          String?           // Correo electrónico
+  sapCode        String?          // Código SAP (opcional)
+  gerencia       String?          // Gerencia o unidad organizacional
+  empresa        String?          // Empresa o razón social, si aplica
+  position           String?          // Cargo o posición
+  startDate      DateTime
+  endDate        DateTime
+  isActive       Boolean          @default(true)
+  justifications Justification[] // Relación uno a muchos
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
 model Justification {
   id                String              @id @default(uuid())
 
   // Datos estáticos del trabajador justificado
-  employeeNombre      String
+  employeeNombre    String
   employeeRut       String
   employeeEmail     String
   employeeSapCode   String?            // Opcional
   employeeGerencia  String?            // Opcional
   employeeEmpresa   String?
+  employeePosition         String?          // Cargo o posición
+  // Relación con perfil del empleado
+  employeeProfileId String
+  employeeProfile   EmployeeProfile    @relation(fields: [employeeProfileId], references: [id])
 
   // Información de la justificación
   startDate         DateTime
@@ -55,8 +76,6 @@ model Justification {
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 }
-
-
 
 enum Role {
   USER

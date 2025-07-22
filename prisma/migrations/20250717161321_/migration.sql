@@ -11,6 +11,17 @@ CREATE TABLE "User" (
 );
 
 -- CreateTable
+CREATE TABLE "EmployeeProfile" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "rut" TEXT NOT NULL,
+    "startDate" DATETIME NOT NULL,
+    "endDate" DATETIME NOT NULL,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
 CREATE TABLE "Justification" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "employeeNombre" TEXT NOT NULL,
@@ -19,6 +30,7 @@ CREATE TABLE "Justification" (
     "employeeSapCode" TEXT,
     "employeeGerencia" TEXT,
     "employeeEmpresa" TEXT,
+    "employeeProfileId" TEXT NOT NULL,
     "startDate" DATETIME NOT NULL,
     "endDate" DATETIME NOT NULL,
     "type" TEXT NOT NULL,
@@ -32,6 +44,7 @@ CREATE TABLE "Justification" (
     "reviewerComment" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "Justification_employeeProfileId_fkey" FOREIGN KEY ("employeeProfileId") REFERENCES "EmployeeProfile" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "Justification_creatorId_fkey" FOREIGN KEY ("creatorId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "Justification_reviewerId_fkey" FOREIGN KEY ("reviewerId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
@@ -41,3 +54,6 @@ CREATE UNIQUE INDEX "User_rut_key" ON "User"("rut");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EmployeeProfile_rut_key" ON "EmployeeProfile"("rut");
