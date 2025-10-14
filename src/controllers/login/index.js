@@ -42,14 +42,14 @@ function logout(req, res) {
 async function changePassword(req, res, next) {
   try {
     const { rut } = req.body;
-    console.log("🚀 ~ changePassword ~ rut:", rut)
+  
 
     if (!rut) {
       return res.status(400).json({ error: "El RUT es requerido" });
     }
 
     const result = await changePasswordService(rut);
-    console.log("🚀 ~ changePassword ~ result:", result)
+
 
     if (result.success) {
       return res.status(200).json({ success: true, message: "Correo enviado con éxito" });

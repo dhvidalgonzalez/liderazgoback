@@ -131,3 +131,19 @@ This will create:
 ## 📚 License
 
 MIT
+
+Errores:
+npm --version
+npm : No se puede cargar el archivo C:\Program Files\nodejs\npm.ps1 porque la ejecución de scripts está deshabilitada en este sistema. Para obtener más información, consulta el 
+tema about_Execution_Policies en https:/go.microsoft.com/fwlink/?LinkID=135170.
+En línea: 1 Carácter: 1
++ npm --version
++ ~~~
+    + CategoryInfo          : SecurityError: (:) [], PSSecurityException
+    + FullyQualifiedErrorId : UnauthorizedAccess
+PS C:\Users\PROSIGA-DET-0347\proyectos\liderazgo> npm --version
+10.9.3
+
+Ya lo solucione, debes ejecutar el powershell como administrador y ejecutar el comando Set-ExecutionPolicy Unrestricted
+
+
