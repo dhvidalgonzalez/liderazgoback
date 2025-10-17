@@ -147,3 +147,11 @@ PS C:\Users\PROSIGA-DET-0347\proyectos\liderazgo> npm --version
 Ya lo solucione, debes ejecutar el powershell como administrador y ejecutar el comando Set-ExecutionPolicy Unrestricted
 
 
+2. Trae los cambios del remoto:
+git fetch upstream
+
+
+(Esto no cambia nada todavía, solo descarga lo más reciente del repo remoto.)
+
+3. Sobrescribe tu rama local con la del remoto:
+git reset --hard upstream/main

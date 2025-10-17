@@ -37,6 +37,7 @@ async function listTrabajadoresController(req, res, next) {
 
     const trabajadores = await listTrabajadores(filtros);
 
+
     return res.status(200).json(trabajadores);
   } catch (err) {
     console.error("❌ Error en listTrabajadoresController:", err);

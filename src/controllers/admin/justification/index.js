@@ -23,7 +23,7 @@ async function list(req, res, next) {
     };
 
     const justifications = await listJustificationsService(filters);
-    console.log("🚀 ~ list ~ justifications:", justifications)
+
     res.json(justifications);
   } catch (err) {
     next(err);

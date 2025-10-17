@@ -99,7 +99,7 @@ async function loginService(rut, clave) {
 
 // 🔄 Recuperación de contraseña y envío de correo
 async function changePasswordService(rut) {
-  console.log("🚀 ~ changePasswordService ~ rut:", rut);
+  
 
   const payload = {
     rutfull: rut,

@@ -6,32 +6,47 @@ const {
   deleteJustificationService,
 } = require("../../services/justification");
 
+/**
+ * 🔹 Lista todas las justificaciones del usuario autenticado
+ */
 async function list(req, res, next) {
   try {
-    const  creatorId  = req.user.userId;
-
+    const creatorId = req.user?.userId;
     if (!creatorId) {
-      return res.status(400).json({ error: "Falta el parámetro creatorId" });
+      return res.status(400).json({ error: "Falta el parámetro creatorId (token inválido o ausente)" });
     }
 
-    const justifications = await listJustificationsService(creatorId); // 👈 pasa el ID
-
-    res.json(justifications);
+    const justifications = await listJustificationsService(creatorId);
+    return res.json(justifications);
   } catch (err) {
+    console.error("❌ Error en list controller:", err);
     next(err);
   }
 }
 
+/**
+ * 🔹 Obtiene una justificación por ID
+ */
 async function get(req, res, next) {
   try {
     const { id } = req.params;
     const justification = await getJustificationService(id);
-    res.json(justification);
+
+    if (!justification) {
+      return res.status(404).json({ error: "Justificación no encontrada" });
+    }
+
+    return res.json(justification);
   } catch (err) {
+    console.error("❌ Error en get controller:", err);
     next(err);
   }
 }
 
+/**
+ * 🔹 Crea una nueva justificación
+ * - Recupera automáticamente el perfil por RUT
+ */
 async function create(req, res, next) {
   try {
     const file = req.file;
@@ -41,67 +56,60 @@ async function create(req, res, next) {
       file: _,
       startDate,
       endDate,
-      employeeProfileId,
       employeePosition,
       ...rest
     } = req.body;
-      console.log("🚀 ~ create ~ rest:", req.body)
 
     const parsedStartDate = startDate ? new Date(startDate) : null;
     const parsedEndDate = endDate ? new Date(endDate) : null;
 
-    if (isNaN(parsedStartDate) || isNaN(parsedEndDate)) {
+    if (!parsedStartDate || !parsedEndDate || isNaN(parsedStartDate) || isNaN(parsedEndDate)) {
       return res.status(400).json({ error: "Fechas inválidas" });
     }
 
     const data = {
       ...rest,
-      employeePosition: employeePosition,
+      employeePosition,
       startDate: parsedStartDate,
       endDate: parsedEndDate,
       documentUrl,
-      creator: {
-        connect: { id: req.user.userId }, // ✅ NO uses creatorId directamente
-      },
-      employeeProfile: {
-        connect: { id: employeeProfileId },
-      },
+      creatorId: req.user.userId,
     };
 
     const justification = await createJustificationService(data);
-    res.status(201).json(justification);
+    return res.status(201).json(justification);
   } catch (err) {
+    console.error("❌ Error en create controller:", err);
     next(err);
   }
 }
 
-
-
-
-
-
-
+/**
+ * 🔹 Actualiza estado de revisión de una justificación
+ */
 async function update(req, res, next) {
   try {
     const { id } = req.params;
     const { status, reviewerId } = req.body;
-    const justification = await updateJustificationStatusService(
-      id,
-      status,
-      reviewerId
-    );
-    res.json(justification);
+
+    const justification = await updateJustificationStatusService(id, status, reviewerId);
+    return res.json(justification);
   } catch (err) {
+    console.error("❌ Error en update controller:", err);
     next(err);
   }
 }
 
+/**
+ * 🔹 Elimina una justificación
+ */
 async function remove(req, res, next) {
   try {
     const { id } = req.params;
     await deleteJustificationService(id);
-    res.status(204).end();
+    return res.status(204).end();
   } catch (err) {
+    console.error("❌ Error en remove controller:", err);
     next(err);
   }
 }

@@ -3,7 +3,7 @@ const prisma = new PrismaClient();
 const { faker } = require("@faker-js/faker");
 
 async function main() {
-  console.log("🚀 Seeding users and justifications...");
+
 
   // Creamos 10 usuarios
   for (let i = 1; i <= 10; i++) {

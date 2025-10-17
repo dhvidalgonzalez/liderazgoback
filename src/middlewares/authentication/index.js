@@ -12,7 +12,7 @@ function verifyJWT(req, res, next) {
     }
   }
 
-  console.log("🚀 ~ verifyJWT ~ token:", token);
+ 
 
   if (!token) {
     return res.status(401).json({ message: "No autorizado: token no presente" });

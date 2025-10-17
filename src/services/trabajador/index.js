@@ -45,8 +45,20 @@ async function listEmpresas() {
   }
 }
 
+function cleanRut(rut) {
+  // Elimina puntos y guión, devuelve solo números
+  return rut.replace(/[\.\-]/g, '');
+}
+
+function isValidRutSearch(input) {
+  // Determina si la búsqueda es un RUT (formato numérico o con guion)
+  // Aquí puedes ajustar la lógica para considerar los formatos válidos
+  return /^[0-9]+[-]?[0-9kK]?$/.test(input.replace(/\./g, ''));
+}
+
 async function listTrabajadores(filters = {}) {
   const { rut, nombre, gerencia, empresa } = filters;
+ 
 
   try {
     const pool = await sql.connect(config);
@@ -54,11 +66,12 @@ async function listTrabajadores(filters = {}) {
     const request = pool.request();
 
     if (rut) {
-      query += ' AND Rut = @rut';
-      request.input('rut', sql.VarChar, rut);
+      // Busca por Rut con LIKE para soportar búsqueda parcial con máscara
+      query += ' AND Rut LIKE @rut';
+      request.input('rut', sql.VarChar, `%${rut}%`);
     }
 
-    if (nombre) {
+    if (nombre && !rut) {
       query += ' AND Nombre LIKE @nombre';
       request.input('nombre', sql.VarChar, `%${nombre}%`);
     }
@@ -81,6 +94,7 @@ async function listTrabajadores(filters = {}) {
     throw error;
   }
 }
+
 
 module.exports = {
   listTrabajadores,
