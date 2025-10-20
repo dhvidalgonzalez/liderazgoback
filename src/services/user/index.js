@@ -111,22 +111,34 @@ async function deleteUserService(id) {
 }
 
 async function getOrCreateUserService({ rut, name }) {
-  let user = await prisma.user.findUnique({ where: { rut } });
+  const rutNormalized = rut.trim().toUpperCase();
 
-  if (!user) {
-    user = await prisma.user.create({
-      data: {
-        rut,
-        name,
-        email: "", // correo falso por ahora
-        password: "placeholder",            // si es requerido
-        role: "USER"
-      },
-    });
+  try {
+    // Busca el usuario por RUT
+    let user = await prisma.user.findUnique({ where: { rut: rutNormalized } });
+
+    // Si no existe, créalo (sin email ni password)
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          rut: rutNormalized,
+          name: name.trim(),
+          role: "USER",
+        },
+      });
+      console.log(`🆕 Usuario creado: ${user.name} (${user.rut})`);
+    } else {
+      console.log(`✅ Usuario existente encontrado: ${user.name} (${user.rut})`);
+    }
+
+    return user;
+  } catch (err) {
+    console.error("❌ Error en getOrCreateUserService:", err);
+    throw err;
   }
-
-  return user;
 }
+
+
 
 
 module.exports = {

@@ -75,8 +75,11 @@ npm run dev
 To apply migrations and generate the Prisma client:
 
 ```bash
-npm run migrate
-npm run generate
+
+En producion aplicar
+npx prisma migrate deploy
+
+
 ```
 
 ---

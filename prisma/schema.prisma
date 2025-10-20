@@ -11,8 +11,8 @@ model User {
   id        String   @id @default(uuid())
   rut       String   @unique
   name      String
-  email     String   @unique
-  password  String
+  email     String?
+  password  String?
   role      String   @default("USER") // Reemplaza el enum Role
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
