@@ -1,68 +1,99 @@
 const prisma = require("../../../db/client");
 
-// 🔹 Listar todos los perfiles de empleados (opcional: filtros)
-async function listEmployeeProfilesService(filters = {}) {
-  const { empresa, gerencia, name, rut, isActive } = filters;
-
-  return await prisma.employeeProfile.findMany({
-    where: {
-      ...(empresa && { empresa: { contains: empresa, mode: "insensitive" } }),
-      ...(gerencia && { gerencia: { contains: gerencia, mode: "insensitive" } }),
-      ...(name && { name: { contains: name, mode: "insensitive" } }),
-      ...(rut && { rut: { contains: rut, mode: "insensitive" } }),
-      ...(isActive !== undefined && { isActive: isActive === "true" }),
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
+/**
+ * 📋 Listar todos los perfiles de empleados
+ */
+async function listEmployeeProfilesService() {
+  return prisma.employeeProfile.findMany({
+    orderBy: { name: "asc" },
   });
 }
 
-
-// 🔹 Obtener un perfil por ID
+/**
+ * 🔍 Obtener un perfil por ID
+ */
 async function getEmployeeProfileService(id) {
-  return await prisma.employeeProfile.findUnique({
+  return prisma.employeeProfile.findUnique({
     where: { id },
   });
 }
 
-// 🔹 Crear un nuevo perfil de empleado
-async function createEmployeeProfileService(data) {
-  return await prisma.employeeProfile.create({
-    data,
-  });
-}
-
-// 🔹 Actualizar un perfil de empleado
-async function updateEmployeeProfileService(id, data) {
-  return await prisma.employeeProfile.update({
-    where: { id },
-    data,
-  });
-}
-
-// 🔹 Eliminar un perfil de empleado
-async function deleteEmployeeProfileService(id) {
-  return await prisma.employeeProfile.delete({
-    where: { id },
-  });
-}
-
-// src/services/admin/employeeProfile/getByRut.js
+/**
+ * 🔍 Buscar un perfil por RUT (opcionalmente útil para sincronización)
+ */
 async function getEmployeeProfileByRutService(rut) {
-  return await prisma.employeeProfile.findUnique({
+  return prisma.employeeProfile.findUnique({
     where: { rut },
   });
 }
 
+/**
+ * ➕ Crear un nuevo perfil de empleado
+ */
+async function createEmployeeProfileService(data) {
+  return prisma.employeeProfile.create({
+    data: {
+      rut: data.rut,
+      name: data.name,
+      email: data.email || null,
+      sapCode: data.sapCode || null,
+      gerencia: data.gerencia || null,
+      empresa: data.empresa || null,
+      position: data.position || null,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      isActive: data.isActive ?? true,
+    },
+  });
+}
 
+/**
+ * ✏️ Actualizar un perfil existente
+ */
+async function updateEmployeeProfileService(id, data) {
+  return prisma.employeeProfile.update({
+    where: { id },
+    data: {
+      rut: data.rut,
+      name: data.name,
+      email: data.email || null,
+      sapCode: data.sapCode || null,
+      gerencia: data.gerencia || null,
+      empresa: data.empresa || null,
+      position: data.position || null,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      isActive: data.isActive,
+    },
+  });
+}
 
+/**
+ * 🔴 Eliminar un perfil (solo si no tiene justificaciones asociadas)
+ */
+async function deleteEmployeeProfileService(id) {
+  try {
+    // Comprueba si existen justificaciones asociadas
+    const count = await prisma.justification.count({
+      where: { employeeProfileId: id },
+    });
+
+    if (count > 0) {
+      throw new Error("No se puede eliminar: existen justificaciones asociadas.");
+    }
+
+    return prisma.employeeProfile.delete({ where: { id } });
+  } catch (err) {
+    console.error("❌ Error al eliminar perfil de empleado:", err);
+    throw err;
+  }
+}
 
 module.exports = {
   listEmployeeProfilesService,
   getEmployeeProfileService,
+  getEmployeeProfileByRutService,
   createEmployeeProfileService,
   updateEmployeeProfileService,
   deleteEmployeeProfileService,
-  getEmployeeProfileByRutService,
 };

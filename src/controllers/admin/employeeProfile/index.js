@@ -1,106 +1,130 @@
 const {
   listEmployeeProfilesService,
   getEmployeeProfileService,
-  createEmployeeProfileService,
-  updateEmployeeProfileService, // ✅ usamos el servicio
-  deleteEmployeeProfileService,
   getEmployeeProfileByRutService,
+  createEmployeeProfileService,
+  updateEmployeeProfileService,
+  deleteEmployeeProfileService,
 } = require("../../../services/admin/employeeProfile");
 
-// 🔹 Listar todos los perfiles (con posibles filtros)
+// 📋 Listar todos los empleados
 async function list(req, res, next) {
   try {
-    const filters = req.query;
-    const profiles = await listEmployeeProfilesService(filters);
-    res.json(profiles);
+    const employees = await listEmployeeProfilesService();
+    res.json(employees);
   } catch (err) {
     next(err);
   }
 }
 
-// 🔹 Obtener un perfil por ID
+// 🔍 Obtener perfil por ID
 async function get(req, res, next) {
   try {
     const { id } = req.params;
-    const profile = await getEmployeeProfileService(id);
-    if (!profile) {
-      return res.status(404).json({ error: "Perfil no encontrado" });
-    }
-    res.json(profile);
-  } catch (err) {
-    next(err);
-  }
-}
 
-// 🔹 Crear un nuevo perfil
-async function create(req, res, next) {
-  try {
-    const { startDate, endDate, ...rest } = req.body;
+    const employee = await getEmployeeProfileService(id);
 
-    const parsedStartDate = startDate ? new Date(startDate) : null;
-    const parsedEndDate = endDate ? new Date(endDate) : null;
-
-    if (!parsedStartDate || !parsedEndDate || isNaN(parsedStartDate) || isNaN(parsedEndDate)) {
-      return res.status(400).json({ error: "Fechas inválidas" });
+    if (!employee) {
+      return res.status(404).json({ message: "Empleado no encontrado" });
     }
 
-    const data = {
-      ...rest,
-      startDate: parsedStartDate,
-      endDate: parsedEndDate,
-    };
-
-    const profile = await createEmployeeProfileService(data);
-    res.status(201).json(profile);
+    res.json(employee);
   } catch (err) {
     next(err);
   }
 }
 
-// 🔹 Actualizar un perfil existente
-async function update(req, res, next) {
-  try {
-    const { startDate, endDate, ...rest } = req.body;
-    const { id } = req.params;
-
-    if (!id) {
-      return res.status(400).json({ error: "El campo id es requerido" });
-    }
-
-    const parsedStartDate = startDate ? new Date(startDate) : undefined;
-    const parsedEndDate = endDate ? new Date(endDate) : undefined;
-
-    const data = {
-      ...rest,
-      ...(parsedStartDate && { startDate: parsedStartDate }),
-      ...(parsedEndDate && { endDate: parsedEndDate }),
-    };
-
-    const updatedProfile = await updateEmployeeProfileService(id, data); // ✅ nuevo servicio
-
-    res.json(updatedProfile);
-  } catch (err) {
-    next(err);
-  }
-}
-
-// 🔹 Eliminar un perfil
-async function remove(req, res, next) {
-  try {
-    const { id } = req.params;
-    await deleteEmployeeProfileService(id);
-    res.status(204).end();
-  } catch (err) {
-    next(err);
-  }
-}
-
-// 🔹 Obtener por RUT
+// 🔎 Obtener perfil por RUT
 async function getByRut(req, res, next) {
   try {
     const { rut } = req.params;
-    const profile = await getEmployeeProfileByRutService(rut);
-    res.json({ exists: !!profile, profile });
+
+    if (!rut) {
+      return res.status(400).json({ message: "Debe proporcionar un RUT válido" });
+    }
+
+    const employee = await getEmployeeProfileByRutService(rut.trim().toUpperCase());
+
+    if (!employee) {
+      return res.status(404).json({ message: "Empleado no encontrado con ese RUT" });
+    }
+
+    res.json(employee);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ➕ Crear perfil
+async function create(req, res, next) {
+  try {
+    const {
+      rut,
+      name,
+      email,
+      sapCode,
+      gerencia,
+      empresa,
+      position,
+      startDate,
+      endDate,
+      isActive,
+    } = req.body;
+
+    if (!rut || !name || !startDate || !endDate) {
+      return res
+        .status(400)
+        .json({ message: "Los campos rut, name, startDate y endDate son obligatorios" });
+    }
+
+    const newEmployee = await createEmployeeProfileService({
+      rut,
+      name,
+      email,
+      sapCode,
+      gerencia,
+      empresa,
+      position,
+      startDate,
+      endDate,
+      isActive,
+    });
+
+    res.status(201).json(newEmployee);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ✏️ Actualizar perfil existente
+async function update(req, res, next) {
+  try {
+    const { id } = req.params;
+    const data = req.body;
+
+    const employeeExists = await getEmployeeProfileService(id);
+    if (!employeeExists) {
+      return res.status(404).json({ message: "Empleado no encontrado" });
+    }
+
+    const updatedEmployee = await updateEmployeeProfileService(id, data);
+    res.json(updatedEmployee);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// 🔴 Eliminar perfil
+async function remove(req, res, next) {
+  try {
+    const { id } = req.params;
+    const employeeExists = await getEmployeeProfileService(id);
+    if (!employeeExists) {
+      return res.status(404).json({ message: "Empleado no encontrado" });
+    }
+
+    await deleteEmployeeProfileService(id);
+    res.status(204).end();
   } catch (err) {
     next(err);
   }
@@ -109,8 +133,8 @@ async function getByRut(req, res, next) {
 module.exports = {
   list,
   get,
+  getByRut,
   create,
   update,
   remove,
-  getByRut,
 };
