@@ -8,13 +8,21 @@ const {
 } = require("../../controllers/justification");
 
 const router = express.Router();
-
 const upload = require("../../middlewares/upload");
 
-router.get("/", list); // GET /justifications
-router.get("/:id", get); // GET /justifications/:id
-router.post("/", upload.single("file"), create); // POST /justifications
-router.put("/:id/status", update); // PUT /justifications/:id/status
-router.delete("/:id", remove); // DELETE /justifications/:id
+// 🔹 GET /justification?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+router.get("/", list);
+
+// 🔹 GET /justification/:id
+router.get("/:id", get);
+
+// 🔹 POST /justification
+router.post("/", upload.single("file"), create);
+
+// 🔹 PUT /justification/:id/status
+router.put("/:id/status", update);
+
+// 🔹 DELETE /justification/:id
+router.delete("/:id", remove);
 
 module.exports = router;

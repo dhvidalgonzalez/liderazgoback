@@ -8,15 +8,24 @@ const {
 
 /**
  * 🔹 Lista todas las justificaciones del usuario autenticado
+ *    (sin paginación, con filtro opcional de fechas)
  */
 async function list(req, res, next) {
   try {
     const creatorId = req.user?.userId;
     if (!creatorId) {
-      return res.status(400).json({ error: "Falta el parámetro creatorId (token inválido o ausente)" });
+      return res.status(400).json({
+        error: "Falta el parámetro creatorId (token inválido o ausente)",
+      });
     }
 
-    const justifications = await listJustificationsService(creatorId);
+    // Filtros opcionales
+    const { startDate, endDate } = req.query;
+    const filters = {};
+    if (startDate) filters.startDate = startDate;
+    if (endDate) filters.endDate = endDate;
+
+    const justifications = await listJustificationsService(creatorId, filters);
     return res.json(justifications);
   } catch (err) {
     console.error("❌ Error en list controller:", err);
@@ -33,7 +42,9 @@ async function get(req, res, next) {
     const justification = await getJustificationService(id);
 
     if (!justification) {
-      return res.status(404).json({ error: "Justificación no encontrada" });
+      return res
+        .status(404)
+        .json({ error: "Justificación no encontrada" });
     }
 
     return res.json(justification);
@@ -45,25 +56,23 @@ async function get(req, res, next) {
 
 /**
  * 🔹 Crea una nueva justificación
- * - Recupera automáticamente el perfil por RUT
  */
 async function create(req, res, next) {
   try {
     const file = req.file;
     const documentUrl = file ? `/uploads/${file.filename}` : null;
 
-    const {
-      file: _,
-      startDate,
-      endDate,
-      employeePosition,
-      ...rest
-    } = req.body;
+    const { file: _, startDate, endDate, employeePosition, ...rest } = req.body;
 
     const parsedStartDate = startDate ? new Date(startDate) : null;
     const parsedEndDate = endDate ? new Date(endDate) : null;
 
-    if (!parsedStartDate || !parsedEndDate || isNaN(parsedStartDate) || isNaN(parsedEndDate)) {
+    if (
+      !parsedStartDate ||
+      !parsedEndDate ||
+      isNaN(parsedStartDate) ||
+      isNaN(parsedEndDate)
+    ) {
       return res.status(400).json({ error: "Fechas inválidas" });
     }
 
@@ -92,7 +101,11 @@ async function update(req, res, next) {
     const { id } = req.params;
     const { status, reviewerId } = req.body;
 
-    const justification = await updateJustificationStatusService(id, status, reviewerId);
+    const justification = await updateJustificationStatusService(
+      id,
+      status,
+      reviewerId
+    );
     return res.json(justification);
   } catch (err) {
     console.error("❌ Error en update controller:", err);

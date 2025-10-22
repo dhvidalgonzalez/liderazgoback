@@ -1,14 +1,10 @@
 const { loginService, changePasswordService } = require("../../services/login");
 
-const jwtExpiry = process.env.JWT_EXPIRY;
-
 // 🔐 Iniciar sesión
 async function login(req, res, next) {
   try {
     const { rut, clave } = req.body;
-
     if (!rut || !clave) {
-
       return res.status(400).json({ error: "RUT y clave son requeridos" });
     }
 
@@ -17,9 +13,9 @@ async function login(req, res, next) {
     const isProduction = process.env.NODE_ENV === "production";
     res.cookie("token", token, {
       httpOnly: true,
-      secure: false,
+      secure: isProduction,
       sameSite: "Lax",
-      maxAge: 2 * 60 * 60 * 1000,
+      maxAge: 2 * 60 * 60 * 1000, // 2h
     });
 
     res.status(200).json({ success: true });
@@ -30,26 +26,26 @@ async function login(req, res, next) {
 
 // 🚪 Cerrar sesión
 function logout(req, res) {
+  const isProduction = process.env.NODE_ENV === "production";
   res.clearCookie("token", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isProduction,
     sameSite: "Strict",
   });
   res.status(200).json({ success: true, message: "Sesión cerrada exitosamente" });
 }
 
-// 🔁 Solicitar código para cambio de contraseña
+// 🔁 Solicitar código/correo para cambio de contraseña (ÚNICO PASO)
 async function changePassword(req, res, next) {
   try {
     const { rut } = req.body;
-  
-
+ 
     if (!rut) {
       return res.status(400).json({ error: "El RUT es requerido" });
     }
 
     const result = await changePasswordService(rut);
-
+  
 
     if (result.success) {
       return res.status(200).json({ success: true, message: "Correo enviado con éxito" });
@@ -74,15 +70,9 @@ async function changePassword(req, res, next) {
       detalle: result.detalle || "Error desconocido",
     });
   } catch (err) {
-    console.error("❌ Error en controlador changePassword:", err.message?.status);
+    console.error("❌ Error en controlador changePassword:", err?.status || err?.message || err);
     next(err);
   }
 }
 
-
-
-module.exports = {
-  login,
-  logout,
-  changePassword,
-};
+module.exports = { login, logout, changePassword };

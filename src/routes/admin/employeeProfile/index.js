@@ -6,6 +6,7 @@ const {
   update,
   remove,
   getByRut,
+  upsertByRut, // 👈 nuevo
 } = require("../../../controllers/admin/employeeProfile");
 
 const router = express.Router();
@@ -13,46 +14,50 @@ const router = express.Router();
 /**
  * 📦 Rutas base: /api/admin/employee-profiles
  * -----------------------------------------------------
- * ⚠️ IMPORTANTE:
- * - Las rutas más específicas (como /rut/:rut) deben declararse ANTES
- *   que las rutas dinámicas (/:id), para evitar conflictos con Express.
- * - Se agregan logs de depuración para confirmar la ejecución del flujo.
+ * - Soporta paginación y filtros vía query:
+ *   ?page=1&pageSize=10&q=texto&sortBy=name&sortOrder=asc&isActive=true&empresa=Codelco&gerencia=Chuqui
+ * - /rut/:rut y /upsert-by-rut deben ir antes que /:id
  */
 
-// 🧭 Log inicial para verificar montaje
-console.log("🧭 [Router] EmployeeProfile routes mounted at /api/admin/employee-profiles");
+console.log("🧭 [Router] EmployeeProfile mounted at /api/admin/employee-profiles");
 
-// ✅ Buscar perfil por RUT (debe ir antes de /:id)
+// ✅ Buscar perfil por RUT (antes de /:id)
 router.get("/rut/:rut", (req, res, next) => {
   console.log("➡️ [GET] /rut/:rut -> getByRut()");
   getByRut(req, res, next);
 });
 
-// ✅ Obtener todos los perfiles
+// ✅ Upsert por RUT (crear/actualizar con defaults de fechas)
+router.post("/upsert-by-rut", (req, res, next) => {
+  console.log("➡️ [POST] /upsert-by-rut -> upsertByRut()");
+  upsertByRut(req, res, next);
+});
+
+// ✅ Listar (paginado por query)
 router.get("/", (req, res, next) => {
   console.log("➡️ [GET] / -> list()");
   list(req, res, next);
 });
 
-// ✅ Obtener perfil por ID
+// ✅ Obtener por ID
 router.get("/:id", (req, res, next) => {
   console.log("➡️ [GET] /:id -> get()");
   get(req, res, next);
 });
 
-// ✅ Crear nuevo perfil
+// ✅ Crear
 router.post("/", (req, res, next) => {
   console.log("➡️ [POST] / -> create()");
   create(req, res, next);
 });
 
-// ✅ Actualizar perfil existente
+// ✅ Actualizar
 router.put("/:id", (req, res, next) => {
   console.log("➡️ [PUT] /:id -> update()");
   update(req, res, next);
 });
 
-// ✅ Eliminar perfil
+// ✅ Eliminar
 router.delete("/:id", (req, res, next) => {
   console.log("➡️ [DELETE] /:id -> remove()");
   remove(req, res, next);

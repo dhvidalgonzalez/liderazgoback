@@ -1,7 +1,6 @@
 const axios = require("axios");
 const https = require("https");
 const jwt = require("jsonwebtoken");
-// ⚠️ Si tienes un módulo de email, puedes importarlo dentro de changePasswordService cuando lo uses
 const { getOrCreateUserService } = require("../user");
 
 // ==============================
@@ -30,14 +29,10 @@ async function getToken() {
       aplicacion: tokenAppId,
     },
     {
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
       httpsAgent: new https.Agent({ rejectUnauthorized: false }),
     }
   );
-
   tokenCache = res.data.token;
   return tokenCache;
 }
@@ -47,17 +42,14 @@ async function getToken() {
 // ============================================================
 async function withTokenRetry(callback) {
   if (!tokenCache) tokenCache = await getToken();
-
   try {
     return await callback(tokenCache);
   } catch (err) {
     const status = err.response?.status;
     const detalle = err.response?.data?.detalle?.toLowerCase?.() || "";
-
     const isExpired =
       status === 401 ||
       (status === 400 && (detalle.includes("token expirado") || detalle.includes("token inválido")));
-
     if (isExpired) {
       tokenCache = await getToken();
       return await callback(tokenCache);
@@ -67,14 +59,10 @@ async function withTokenRetry(callback) {
 }
 
 // ============================================================
-// 🔐 Servicio de login (manteniendo loginPayload intacto)
+// 🔐 Servicio de login
 // ============================================================
 async function loginService(rut, clave) {
-  const loginPayload = {
-    usuario: rut,
-    clave,
-    aplicacion: loginAppId,
-  };
+  const loginPayload = { usuario: rut, clave, aplicacion: loginAppId };
 
   const response = await withTokenRetry((token) =>
     axios.post(`${apiBaseUrl}/ControlAcceso/Login`, loginPayload, {
@@ -88,20 +76,17 @@ async function loginService(rut, clave) {
   );
 
   const remoteUser = response.data?.[0];
-
   if (!remoteUser?.existecuenta) {
     const err = new Error("Cuenta no existe o sin acceso");
     err.status = 401;
     throw err;
   }
 
-  // Usuario local (si lo necesitas para tu BD)
   const localUser = await getOrCreateUserService({
     rut: remoteUser.rutfull,
     name: remoteUser.nombrefull,
   });
 
-  // Armar payload del JWT con los datos que quieres tener disponibles en el frontend (vía /me)
   const payload = {
     userId: localUser.id,
     rut: remoteUser.rutfull,
@@ -111,51 +96,53 @@ async function loginService(rut, clave) {
     nivelAcceso: remoteUser.idAdmNivelAcceso || [],
   };
 
-  // ⚠️ Mantengo tu uso de jwtExpiry como lo tenías (no cambio semántica)
-  const token = jwt.sign(payload, jwtSecret, {
-    expiresIn: jwtExpiry,
-  });
-
+  const token = jwt.sign(payload, jwtSecret, { expiresIn: jwtExpiry });
   return { token, localUser, remoteUser };
 }
 
 // ============================================================
-// 🔄 Recuperación de contraseña (si lo usas)
+// 🔄 Solicitar envío de correo con código (ÚNICO PASO)
 // ============================================================
 async function changePasswordService(rut) {
-  const payload = {
-    rutfull: rut,
-    idAdmAplicacion: parseInt(loginAppId),
-  };
+  console.log("🚀 ~ changePasswordService ~ rut:", rut)
+  const payload = { rutfull: rut, idAdmAplicacion: parseInt(loginAppId) };
+  console.log("🚀 ~ changePasswordService ~ payload:", payload)
 
-  const response = await withTokenRetry((token) =>
-    axios.post(`${apiBaseUrl}/ControlAcceso/CodigoSeguridad_Nuevo`, payload, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      httpsAgent: new https.Agent({ rejectUnauthorized: false }),
-    })
-  );
+  try {
+    const response = await withTokenRetry((token) =>
+      axios.post(`${apiBaseUrl}/ControlAcceso/CodigoSeguridad_Nuevo`, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+      })
+    );
+    console.log("🚀 ~ changePasswordService ~ response:", response)
 
-  const data = response?.data;
+    const data = response?.data || {};
+    if (data.mensaje === "OK") {
+      return { success: true };
+    }
 
-  if (data.mensaje !== "OK") {
+    const detalle = (data.detalle || "").toLowerCase();
+    if (detalle.includes("ya existe") || detalle.includes("vigente")) {
+      return { success: false, reason: "codigo_existente", vigencia: data.vigencia || data.detalle };
+    }
+    if (detalle.includes("correo") || detalle.includes("email")) {
+      return { success: false, reason: "email_failed", detalle: data.detalle };
+    }
     return { success: false, reason: "error_general", detalle: data.detalle };
+  } catch (err) {
+    // Si la API externa devuelve 409/4xx con semántica de "código activo"
+    const status = err.response?.status;
+    const detalle = err.response?.data?.detalle || err.message;
+    if (status === 409) {
+      return { success: false, reason: "codigo_existente", vigencia: err.response?.data?.vigencia };
+    }
+    return { success: false, reason: "error_general", detalle };
   }
-
-  // Si más adelante reactivas envío de correo, puedes requerir el módulo aquí:
-  // const sendEmail = require("../email");
-  // ... y continuar
-
-  return { success: true };
 }
 
-// ============================================================
-// 📦 Exportar servicios
-// ============================================================
-module.exports = {
-  loginService,
-  changePasswordService,
-};
+module.exports = { loginService, changePasswordService };
