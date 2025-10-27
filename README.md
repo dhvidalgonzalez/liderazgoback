@@ -47,3 +47,6 @@ npx prisma migrate deploy
 4. Reiniciar pm2
 
 pm2 restart <numero de proceso o nombre del proceso>
+
+
+

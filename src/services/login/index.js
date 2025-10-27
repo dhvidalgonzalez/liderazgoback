@@ -2,26 +2,26 @@ const axios = require("axios");
 const https = require("https");
 const jwt = require("jsonwebtoken");
 const { getOrCreateUserService } = require("../user");
-const sendEmail = require("../email"); // tu helper de correo
+const { sendEmail, buildRecoveryEmailTemplate } = require("../email");
 
-// ==============================
+// ============================================================
 // ⚙️ Variables de entorno
-// ==============================
+// ============================================================
 const usuarioApiUni = process.env.APIUNI_USER;
-const claveApiUni   = process.env.APIUNI_PASSWORD;
-const tokenAppId    = process.env.TOKEN_APP_ID;     // 3 (general)
-const loginAppId    = process.env.LOGIN_APP_ID;     // 58 (tu app)
-const apiBaseUrl    = process.env.APIUNI_BASE_URL;  // ej: https://appdetprod.codelco.cl:91/apiuni
-const jwtSecret     = process.env.JWT_SECRET;
-const jwtExpiry     = process.env.JWT_EXPIRY;
-const validateBase  = (process.env.RECOVERY_VALIDATE_BASE_URL || "").replace(/\/+$/, "");
+const claveApiUni = process.env.APIUNI_PASSWORD;
+const tokenAppId = process.env.TOKEN_APP_ID;
+const loginAppId = process.env.LOGIN_APP_ID;
+const apiBaseUrl = (process.env.APIUNI_BASE_URL || "").replace(/\/+$/, "");
+const jwtSecret = process.env.JWT_SECRET;
+const jwtExpiry = process.env.JWT_EXPIRY;
 
-let tokenCache = null;
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+let tokenCache = null;
 
-// ---------------------------
-// Helpers
-// ---------------------------
+// ============================================================
+// 🔧 Helpers
+// ============================================================
+
 function normalizeTxt(s) {
   return (s || "")
     .toString()
@@ -31,49 +31,40 @@ function normalizeTxt(s) {
     .trim();
 }
 
-// calcula DV del RUT (mismo algoritmo que tu PHP)
-function calcDv(numStr) {
-  let sum = 0, mult = 2;
-  for (let i = numStr.length - 1; i >= 0; i--) {
-    sum += parseInt(numStr[i], 10) * mult;
-    mult = mult === 7 ? 2 : mult + 1;
-  }
-  const res = 11 - (sum % 11);
-  if (res === 11) return "0";
-  if (res === 10) return "K";
-  return String(res);
-}
-
-// si viene 12345678 o 18387239, arma 18387239-K; si ya viene 12.345.678-9, limpia puntos y deja DV en mayúscula
+// ✅ Mantiene formato estándar de RUT (con puntos y guion)
 function formatRutForApi(raw) {
   if (!raw) return raw;
-  const s = raw.toString().trim().toUpperCase();
-  // Si ya trae guion y DV
-  if (/^\d{1,9}-[0-9K]$/.test(s.replace(/\./g, ""))) {
-    const sinPuntos = s.replace(/\./g, "");
-    const [num, dv] = sinPuntos.split("-");
-    return `${num}-${dv.toUpperCase()}`;
+  let s = raw.toString().trim().toUpperCase();
+  if (/^\d{1,3}(\.\d{3})*-[0-9K]$/.test(s)) return s; // ya correcto
+
+  if (/^\d{7,9}-[0-9K]$/.test(s)) {
+    const [num, dv] = s.split("-");
+    let numFmt = "";
+    let count = 0;
+    for (let i = num.length - 1; i >= 0; i--) {
+      numFmt = num[i] + numFmt;
+      count++;
+      if (count === 3 && i !== 0) {
+        numFmt = "." + numFmt;
+        count = 0;
+      }
+    }
+    return `${numFmt}-${dv}`;
   }
-  // Si es solo dígitos, calculamos DV
-  const onlyDigits = s.replace(/\D/g, "");
-  if (onlyDigits && /^\d{7,9}$/.test(onlyDigits)) {
-    return `${onlyDigits}-${calcDv(onlyDigits)}`;
-  }
-  // Pasaporte u otro ID no RUT: lo dejamos tal cual
   return s;
 }
 
-// intenta extraer un código desde el detalle ("Código: ABC123", etc.)
-function extractCodeFromDetalle(detalle) {
+// Extrae código de texto
+function extractCode(detalle) {
   if (typeof detalle !== "string") return null;
   const m =
-    detalle.match(/cod(?:igo)?:\s*([A-Za-z0-9\-_.]+)/i) ||
+    detalle.match(/cod(?:igo)?:\s*([A-Za-z0-9\-_]+)/i) ||
     detalle.match(/([A-Za-z0-9]{4,})$/);
   return m ? m[1] : null;
 }
 
 // ============================================================
-// 🔑 Obtener token del servicio externo
+// 🔑 Token API UNI
 // ============================================================
 async function getToken() {
   const res = await axios.post(
@@ -82,43 +73,42 @@ async function getToken() {
       rutfull: "0",
       usuariosistema: usuarioApiUni,
       clave: claveApiUni,
-      aplicacion: tokenAppId, // app general (3)
+      aplicacion: parseInt(tokenAppId, 10),
     },
     {
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
       httpsAgent,
     }
   );
-  tokenCache = res.data.token;
+
+  tokenCache = res.data?.token || null;
+  console.log("✅ Token obtenido:", tokenCache);
   return tokenCache;
 }
 
 // ============================================================
-// 🔁 Ejecuta llamada API con token y renueva si expira
+// 🔁 Envoltura con token y reintento
 // ============================================================
 async function withTokenRetry(callback) {
   if (!tokenCache) tokenCache = await getToken();
   try {
     return await callback(tokenCache);
   } catch (err) {
-    const status = err.response?.status;
-    const detalle = err.response?.data?.detalle?.toLowerCase?.() || "";
-    const isExpired =
-      status === 401 ||
-      (status === 400 && (detalle.includes("token expirado") || detalle.includes("token inválido")));
-    if (isExpired) {
-      tokenCache = await getToken();
-      return await callback(tokenCache);
-    }
+    const status = err.response?.status || 500;
+    const body = err.response?.data || {};
+    console.error("[APIUNI] Error:", status, body);
     throw err;
   }
 }
 
 // ============================================================
-// 🔐 Servicio de login (NO TOCAR)
+// 🔐 Login
 // ============================================================
 async function loginService(rut, clave) {
-  const loginPayload = { usuario: rut, clave, aplicacion: loginAppId };
+  const loginPayload = { usuario: rut, clave, aplicacion: parseInt(loginAppId, 10) };
 
   const response = await withTokenRetry((token) =>
     axios.post(`${apiBaseUrl}/ControlAcceso/Login`, loginPayload, {
@@ -157,7 +147,7 @@ async function loginService(rut, clave) {
 }
 
 // ============================================================
-// 📧 Correo vigente de la persona
+// 📧 Correo vigente
 // ============================================================
 async function getCorreoVigente(rutfull) {
   const resp = await withTokenRetry((token) =>
@@ -178,20 +168,17 @@ async function getCorreoVigente(rutfull) {
 }
 
 // ============================================================
-// 🔄 Solicitar envío de correo con código (flujo completo)
-//   1) Normaliza RUT y pide código a API (idAdmAplicacion = LOGIN_APP_ID)
-//   2) Obtiene correo vigente
-//   3) Envía el email con link/código
+// 🔄 Solicitar código y enviar correo
 // ============================================================
-async function changePasswordService(rut) {
-  const rutfull = formatRutForApi(rut);
-  const payload = { rutfull, idAdmAplicacion: parseInt(loginAppId) };
+async function changePasswordService(rutInput) {
+  const rutfull = formatRutForApi(rutInput);
+  const payload = { rutfull, idAdmAplicacion: parseInt(loginAppId, 10) };
 
-  console.log("[request-code] payload:", payload, "baseUrl:", apiBaseUrl);
+  console.log("📤 Solicitando código para:", rutfull);
 
   try {
-    // 1) Solicitar código
-    const response = await withTokenRetry((token) =>
+    // 1️⃣ Solicitar código
+    const resp = await withTokenRetry((token) =>
       axios.post(`${apiBaseUrl}/ControlAcceso/CodigoSeguridad_Nuevo`, payload, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -202,31 +189,23 @@ async function changePasswordService(rut) {
       })
     );
 
-    const data = response?.data || {};
-    console.log("[request-code] api response:", data);
+    const data = resp?.data || {};
+    console.log("✅ Respuesta APIUNI:", data);
 
     if (data.mensaje !== "OK") {
-      // Propaga el detalle REAL para que lo veas en el front/log
-      return {
-        success: false,
-        reason: "error_general",
-        detalle: data.detalle || "No se generó código.",
-      };
+      throw new Error(data.detalle || "No se generó código.");
     }
 
-    // Extraer código del detalle (si viene)
-    const code = extractCodeFromDetalle(data.detalle);
-
-    // 2) Obtener correo vigente
-    let persona;
+    // 2️⃣ Obtener correo vigente
+    let persona = {};
     try {
       persona = await getCorreoVigente(rutfull);
     } catch (e) {
-      console.error("[request-code] error Correo_Vigente:", e?.response?.data || e.message);
+      console.error("❌ Error obteniendo correo vigente:", e?.response?.data || e.message);
       return {
         success: false,
         reason: "email_failed",
-        detalle: "No fue posible obtener el correo vigente del usuario.",
+        detalle: "No fue posible obtener el correo del usuario.",
       };
     }
 
@@ -241,69 +220,51 @@ async function changePasswordService(rut) {
       };
     }
 
-    // 3) Armar y enviar correo
-    const link = code && validateBase ? `${validateBase}?Codigo=${encodeURIComponent(code)}` : null;
-    const subject = "Reestablecimiento de contraseña";
-    const html = `
-      <table role="presentation" style="width:100%;max-width:700px;border:1px solid #f3f3f3;color:#363636;font-size:14px;line-height:22px">
-        <tr><td style="padding:20px">
-          <p>Estimado(a) ${nombre},</p>
-          <p>Se solicitó el reestablecimiento de su contraseña.</p>
-          ${
-            link
-              ? `<p>Para validar esta solicitud, haga clic aquí: <a href="${link}">Validar</a></p>`
-              : code
-                ? `<p>Use este código para validar su solicitud: <b>${code}</b></p>`
-                : `<p>Su solicitud fue creada correctamente.</p>`
-          }
-          <p>Si usted no solicitó este proceso, puede ignorar este correo.</p>
-        </td></tr>
-      </table>
-    `.trim();
+    // 3️⃣ Enviar correo
+    const codigo = extractCode(data.detalle);
+    const subject = "Clave Única DET - Reestablecimiento de Contraseña";
+    const html = buildRecoveryEmailTemplate(codigo, nombre);
 
-    try {
-      await sendEmail(to, subject, html);
-    } catch (e) {
-      console.error("❌ Error al enviar correo:", e?.response?.data || e.message);
-      return {
-        success: false,
-        reason: "email_failed",
-        detalle: e?.response?.data || e.message || "Fallo al enviar el correo de recuperación",
-      };
-    }
+    await sendEmail(to, subject, html);
+    console.log("✅ Correo enviado correctamente a:", to);
 
-    return { success: true };
+    return { success: true, mensaje: "Código enviado correctamente.", detalle: data.detalle };
   } catch (err) {
-    const status = err.response?.status;
-    const body   = err.response?.data;
+    const status = err.response?.status || 500;
+    const body = err.response?.data || {};
+    const detalle = body?.detalle || body?.mensaje || err.message;
 
-    console.error("[request-code] error status:", status);
-    console.error("[request-code] error data:", body);
+    console.error("[request-code] Error status:", status);
+    console.error("[request-code] Error data:", body);
 
-    // Detecta formato de RUT como causa frecuente
-    if (
-      status === 400 &&
-      normalizeTxt(body?.detalle || "").includes("no se genero codigo") &&
-      /^\d+$/.test((rut || "").toString().trim())
-    ) {
+    // 🧩 Si la API devuelve mensaje legible
+    if (body?.mensaje || body?.detalle) {
       return {
         success: false,
-        reason: "formato_rut",
-        detalle: "El RUT debe incluir dígito verificador (ej. 18387239-7).",
+        status,
+        mensaje: body?.mensaje || "Error",
+        detalle,
+        vigencia: body?.vigencia || null,
       };
     }
 
-    // Código ya vigente
-    const detNorm = normalizeTxt(body?.detalle || err.message);
+    // Código existente
+    const detNorm = normalizeTxt(detalle);
     if (status === 409 || detNorm.includes("ya existe") || detNorm.includes("vigente")) {
       return {
         success: false,
         reason: "codigo_existente",
-        vigencia: body?.vigencia || body?.detalle,
+        detalle,
+        vigencia: body?.vigencia || null,
       };
     }
 
-    return { success: false, reason: "error_general", detalle: body?.detalle || err.message };
+    return {
+      success: false,
+      status,
+      reason: "error_general",
+      detalle,
+    };
   }
 }
 

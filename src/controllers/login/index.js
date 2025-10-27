@@ -36,19 +36,21 @@ function logout(req, res) {
 }
 
 // 🔁 Solicitar código/correo para cambio de contraseña (ÚNICO PASO)
+// 🔁 Solicitar código de recuperación
 async function changePassword(req, res, next) {
   try {
     const { rut } = req.body;
- 
+
     if (!rut) {
       return res.status(400).json({ error: "El RUT es requerido" });
     }
 
     const result = await changePasswordService(rut);
-  
 
     if (result.success) {
-      return res.status(200).json({ success: true, message: "Correo enviado con éxito" });
+      return res
+        .status(200)
+        .json({ success: true, message: "Correo enviado con éxito" });
     }
 
     if (result.reason === "codigo_existente") {
@@ -70,7 +72,7 @@ async function changePassword(req, res, next) {
       detalle: result.detalle || "Error desconocido",
     });
   } catch (err) {
-    console.error("❌ Error en controlador changePassword:", err?.status || err?.message || err);
+    console.error("❌ Error en controlador changePassword:", err.message);
     next(err);
   }
 }
