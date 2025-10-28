@@ -1,4 +1,10 @@
-const { loginService, changePasswordService } = require("../../services/login");
+// controllers/login.js
+const {
+  loginService,
+  changePasswordService,
+  validateTempPasswordService,
+  updatePasswordService,
+} = require("../../services/login");
 
 // 🔐 Iniciar sesión
 async function login(req, res, next) {
@@ -18,9 +24,9 @@ async function login(req, res, next) {
       maxAge: 2 * 60 * 60 * 1000, // 2h
     });
 
-    res.status(200).json({ success: true });
+    return res.status(200).json({ success: true });
   } catch (err) {
-    next(err);
+    return next(err);
   }
 }
 
@@ -32,15 +38,15 @@ function logout(req, res) {
     secure: isProduction,
     sameSite: "Strict",
   });
-  res.status(200).json({ success: true, message: "Sesión cerrada exitosamente" });
+  return res
+    .status(200)
+    .json({ success: true, message: "Sesión cerrada exitosamente" });
 }
 
-// 🔁 Solicitar código/correo para cambio de contraseña (ÚNICO PASO)
-// 🔁 Solicitar código de recuperación
+// 🔁 Solicitar código de recuperación (envía correo)
 async function changePassword(req, res, next) {
   try {
     const { rut } = req.body;
-
     if (!rut) {
       return res.status(400).json({ error: "El RUT es requerido" });
     }
@@ -48,9 +54,10 @@ async function changePassword(req, res, next) {
     const result = await changePasswordService(rut);
 
     if (result.success) {
-      return res
-        .status(200)
-        .json({ success: true, message: "Correo enviado con éxito" });
+      return res.status(200).json({
+        success: true,
+        message: "Correo enviado con éxito",
+      });
     }
 
     if (result.reason === "codigo_existente") {
@@ -63,7 +70,8 @@ async function changePassword(req, res, next) {
     if (result.reason === "email_failed") {
       return res.status(502).json({
         error: "Error al enviar el correo",
-        detalle: result.detalle || "Fallo al enviar el correo de recuperación",
+        detalle:
+          result.detalle || "Fallo al enviar el correo de recuperación",
       });
     }
 
@@ -73,8 +81,90 @@ async function changePassword(req, res, next) {
     });
   } catch (err) {
     console.error("❌ Error en controlador changePassword:", err.message);
-    next(err);
+    return next(err);
   }
 }
 
-module.exports = { login, logout, changePassword };
+// ✅ Validar clave temporal (login con temporal)
+async function validateTempPassword(req, res, next) {
+  try {
+    const { rut, tempPassword } = req.body;
+    if (!rut || !tempPassword) {
+      return res
+        .status(400)
+        .json({ error: "RUT y clave temporal son requeridos" });
+    }
+
+    const result = await validateTempPasswordService(rut, tempPassword);
+
+    if (result.valid) {
+      return res.status(200).json({
+        success: true,
+        accesotemporal: result.accesotemporal,
+        user: result.user,
+      });
+    }
+
+    if (result.reason === "bad_credentials") {
+      return res.status(401).json({ error: "Clave temporal inválida" });
+    }
+    if (result.reason === "no_account") {
+      return res.status(404).json({ error: "Cuenta no existe o sin acceso" });
+    }
+
+    return res.status(result.status || 500).json({
+      error: "No se pudo validar la clave temporal",
+      detalle: result.detalle,
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// 🔒 Confirmar cambio: actualizar contraseña definitiva
+async function finalizeChangePassword(req, res, next) {
+  try {
+    const { rut, newPassword } = req.body;
+    if (!rut || !newPassword) {
+      return res
+        .status(400)
+        .json({ error: "RUT y nueva contraseña son requeridos" });
+    }
+
+    const upd = await updatePasswordService(rut, newPassword);
+
+    if (upd.success) {
+      return res.status(200).json({
+        success: true,
+        message: upd.detalle || "Contraseña actualizada",
+      });
+    }
+
+    if (/igual a anterior/i.test(upd.detalle || "")) {
+      return res.status(409).json({ error: "Clave nueva igual a anterior." });
+    }
+    if (/no cumple requisitos/i.test(upd.detalle || "")) {
+      return res.status(422).json({
+        error:
+          "Clave no cumple requisitos mínimos. Debe incluir algún caracter especial . , ; : * / + - = @ # $",
+      });
+    }
+
+    return res
+      .status(upd.status || 500)
+      .json({ error: "Error al actualizar contraseña", detalle: upd.detalle });
+  } catch (err) {
+    if (err.status === 422) {
+      return res.status(422).json({ error: err.message });
+    }
+    return next(err);
+  }
+}
+
+module.exports = {
+  login,
+  logout,
+  changePassword,
+  validateTempPassword,
+  finalizeChangePassword,
+};

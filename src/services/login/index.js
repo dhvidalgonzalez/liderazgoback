@@ -90,13 +90,19 @@ async function getToken() {
 }
 
 // ============================================================
-// 🔁 Envoltura con token y reintento
+// 🔁 Envoltura con token y reintento (1 vez)
 // ============================================================
 async function withTokenRetry(callback) {
   if (!tokenCache) tokenCache = await getToken();
   try {
     return await callback(tokenCache);
   } catch (err) {
+    const detalle = err?.response?.data?.detalle || "";
+    // Si el backend indica token expirado/ inválido, pedimos uno nuevo y reintentamos una vez
+    if (/token\s*expirado|inv[áa]lido/i.test(detalle)) {
+      tokenCache = await getToken();
+      return callback(tokenCache);
+    }
     const status = err.response?.status || 500;
     const body = err.response?.data || {};
     console.error("[APIUNI] Error:", status, body);
@@ -108,7 +114,12 @@ async function withTokenRetry(callback) {
 // 🔐 Login
 // ============================================================
 async function loginService(rut, clave) {
-  const loginPayload = { usuario: rut, clave, aplicacion: parseInt(loginAppId, 10) };
+  const rutfull = formatRutForApi(rut);
+  const loginPayload = {
+    usuario: rutfull,
+    clave,
+    aplicacion: parseInt(loginAppId, 10),
+  };
 
   const response = await withTokenRetry((token) =>
     axios.post(`${apiBaseUrl}/ControlAcceso/Login`, loginPayload, {
@@ -268,4 +279,100 @@ async function changePasswordService(rutInput) {
   }
 }
 
-module.exports = { loginService, changePasswordService };
+// ============================================================
+// ✅ Validar clave temporal (login con temporal)
+// ============================================================
+async function validateTempPasswordService(rutInput, tempPassword) {
+  const rutfull = formatRutForApi(rutInput);
+  const payload = {
+    usuario: rutfull,
+    clave: tempPassword,
+    aplicacion: parseInt(loginAppId, 10),
+  };
+
+  try {
+    const resp = await withTokenRetry((token) =>
+      axios.post(`${apiBaseUrl}/ControlAcceso/Login`, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        httpsAgent,
+      })
+    );
+
+    const data = resp?.data?.[0];
+    if (!data?.existecuenta) {
+      return { valid: false, reason: "no_account" };
+    }
+
+    return {
+      valid: true,
+      accesotemporal: data?.accesotemporal ?? null,
+      user: {
+        rutfull: data?.rutfull,
+        nombre: data?.nombrefull,
+      },
+    };
+  } catch (err) {
+    const status = err?.response?.status || 500;
+    const detalle = err?.response?.data?.detalle || err.message;
+    if (status === 401 || /credencial|clave|contraseñ/i.test(detalle)) {
+      return { valid: false, reason: "bad_credentials", detalle };
+    }
+    return { valid: false, reason: "error", status, detalle };
+  }
+}
+
+// ============================================================
+// 🔒 Finalizar cambio: actualizar contraseña definitiva
+//     (PerfilClave_Actualizar)
+// ============================================================
+async function updatePasswordService(rutInput, newPassword) {
+  const rutfull = formatRutForApi(rutInput);
+
+  // Misma política que el PHP (incluye especial . , ; : * / + - = @ # $)
+  const policy =
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[.,;:*\/+\-=@#$])[A-Za-z\d.,;:*\/+\-=@#$]+$/;
+  if (!policy.test(newPassword) || newPassword.length < 8) {
+    const err = new Error(
+      "Clave no cumple requisitos mínimos. Debe incluir algún caracter especial . , ; : * / + - = @ # $"
+    );
+    err.status = 422;
+    throw err;
+  }
+
+  const body = { rutfull, usuariosistema: "0", clave: newPassword };
+
+  try {
+    const resp = await withTokenRetry((token) =>
+      axios.post(`${apiBaseUrl}/ControlAcceso/PerfilClave_Actualizar`, body, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        httpsAgent,
+      })
+    );
+
+    const data = resp?.data || {};
+    return {
+      success: data?.mensaje === "OK" || /guardado/i.test(data?.detalle || ""),
+      mensaje: data?.mensaje,
+      detalle: data?.detalle,
+    };
+  } catch (err) {
+    const status = err.response?.status || 500;
+    const detalle = err.response?.data?.detalle || err.message;
+    return { success: false, status, detalle };
+  }
+}
+
+module.exports = {
+  loginService,
+  changePasswordService,
+  validateTempPasswordService,
+  updatePasswordService,
+};
