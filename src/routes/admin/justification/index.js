@@ -1,29 +1,33 @@
+// src/routes/admin/justification/index.js
 const express = require("express");
 const {
   list,
   get,
   update,
+  download,
 } = require("../../../controllers/admin/justification");
 
 const router = express.Router();
 
 /**
  * 📦 Rutas base: /api/admin/justifications
- * -----------------------------------------------------
- * - Listado admite filtros en body (POST) o solo query (GET):
- *   Query: ?page=1&pageSize=20&sortBy=createdAt&sortOrder=desc
- *   Body (opcional en POST): { type, status, createdAtStart, createdAtEnd, search }
- * - Mantengo POST por compatibilidad y agrego GET para clientes REST.
+ * - GET/POST listado (compat)
+ * - GET detalle
+ * - GET descarga de documento
+ * - PUT estado (solo estado/comentarios del revisor)
  */
 
 // ✅ Listar con filtros + paginación (GET o POST)
-router.get("/", list);   // GET /admin/justifications
-router.post("/", list);  // POST /admin/justifications (compat)
+router.get("/", list);    // GET /admin/justifications
+router.post("/", list);   // POST /admin/justifications (compat)
 
-// ✅ Obtener por ID (debe ir después del "/")
-router.get("/:id", get); // GET /admin/justifications/:id
+// ✅ Descarga segura del documento (verifica archivo y MIME real)
+router.get("/:id/document", download); // GET /admin/justifications/:id/document
 
-// ✅ Actualizar estado
+// ✅ Obtener por ID
+router.get("/:id", get);  // GET /admin/justifications/:id
+
+// ✅ Actualizar estado (⚠️ solo campos de revisión; NO documento)
 router.put("/:id/status", update); // PUT /admin/justifications/:id/status
 
 module.exports = router;

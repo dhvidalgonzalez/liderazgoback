@@ -1,18 +1,14 @@
+// services/justification/index.js
 const prisma = require("../../db/client");
 
 /**
- * 🔹 Lista justificaciones creadas por un usuario.
- *    Soporta filtro opcional por rango de fechas.
- *
- * @param {string} creatorId
- * @param {object} filters { startDate?: string, endDate?: string }
+ * 🔹 Lista justificaciones creadas por un usuario (con filtro opcional por fecha)
  */
 async function listJustificationsService(creatorId, filters = {}) {
   if (!creatorId) throw new Error("creatorId es obligatorio");
 
   const where = { creatorId };
 
-  // 🔹 Filtro opcional por rango de fechas
   if (filters.startDate && filters.endDate) {
     where.startDate = {
       gte: new Date(filters.startDate),
@@ -53,6 +49,7 @@ async function getJustificationService(id) {
 
 /**
  * 🔹 Crea una nueva justificación
+ *    (mantiene documentUrl para compat, y agrega documentFilename/documentMime)
  */
 async function createJustificationService(data) {
   if (!data.employeeRut)
@@ -79,7 +76,11 @@ async function createJustificationService(data) {
       endDate: new Date(data.endDate),
       type: data.type,
       description: data.description || "",
+      // compat + nuevos campos
       documentUrl: data.documentUrl || null,
+      documentFilename: data.documentFilename || null,
+      documentMime: data.documentMime || null,
+
       creator: { connect: { id: data.creatorId } },
       employeeProfile: { connect: { id: profile.id } },
       status: "PENDING",

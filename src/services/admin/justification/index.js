@@ -1,3 +1,4 @@
+// src/services/admin/justification/index.js
 const prisma = require("../../../db/client");
 
 /**
@@ -44,7 +45,6 @@ async function listJustificationsService(params = {}) {
     ];
   }
 
-  // Conteo total
   const totalItems = await prisma.justification.count({ where });
   if (totalItems === 0) {
     return {
@@ -64,7 +64,6 @@ async function listJustificationsService(params = {}) {
   const currentPage = Math.min(Math.max(page, 1), totalPages);
   const skip = (currentPage - 1) * pageSize;
 
-  // Consulta principal
   const data = await prisma.justification.findMany({
     where,
     orderBy: { [safeSortBy]: safeSortOrder },
@@ -90,7 +89,7 @@ async function listJustificationsService(params = {}) {
 }
 
 /**
- * 🔹 Obtener una justificación por ID
+ * 🔹 Obtener una justificación por ID (incluye campos de documento)
  */
 async function getJustificationService(id) {
   if (!id) throw new Error("Falta el ID de la justificación.");
@@ -100,6 +99,27 @@ async function getJustificationService(id) {
     include: {
       reviewer: { select: { id: true, name: true, email: true } },
       employeeProfile: true,
+    },
+  });
+}
+
+/**
+ * 🔹 (Opcional) Solo metadatos del documento para verificación/descarga
+ *     Útil si quieres un endpoint /verify o checks rápidos sin traer relaciones.
+ */
+async function getJustificationDocumentMetaService(id) {
+  if (!id) throw new Error("Falta el ID de la justificación.");
+
+  return await prisma.justification.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      employeeRut: true,
+      type: true,
+      documentUrl: true,
+      documentFilename: true,
+      documentMime: true,
+      updatedAt: true,
     },
   });
 }
@@ -134,5 +154,6 @@ async function updateJustificationStatusService(id, payload) {
 module.exports = {
   listJustificationsService,
   getJustificationService,
+  getJustificationDocumentMetaService, // ← opcional, no rompe nada
   updateJustificationStatusService,
 };

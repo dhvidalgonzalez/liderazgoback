@@ -60,7 +60,10 @@ model Justification {
   endDate           DateTime
   type              String   // Reemplaza JustificationType enum
   description       String?
-  documentUrl       String?
+  documentUrl      String?  // compat
+  documentFilename String?  // nuevo
+  documentMime     String?  // nuevo
+  
   status            String   @default("PENDING") // Reemplaza JustificationStatus enum
   reviewedAt        DateTime?
 
