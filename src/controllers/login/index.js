@@ -1,4 +1,3 @@
-// controllers/login.js
 const {
   loginService,
   changePasswordService,
@@ -14,8 +13,24 @@ async function login(req, res, next) {
       return res.status(400).json({ error: "RUT y clave son requeridos" });
     }
 
-    const { token } = await loginService(rut, clave);
+    const result = await loginService(rut, clave);
 
+    // ⚠️ Si requiere recambio (accesotemporal=0), NO seteamos cookie:
+    if (result?.needsPasswordChange) {
+      return res.status(200).json({
+        success: true,
+        requirePasswordChange: true,
+        tempAccess: true,
+        user: {
+          rutfull: result?.remoteUser?.rutfull,
+          nombre: result?.remoteUser?.nombrefull,
+        },
+        message: "Acceso temporal detectado. Debes cambiar tu contraseña.",
+      });
+    }
+
+    // flujo normal
+    const { token } = result;
     const isProduction = process.env.NODE_ENV === "production";
     res.cookie("token", token, {
       httpOnly: true,
@@ -100,7 +115,7 @@ async function validateTempPassword(req, res, next) {
     if (result.valid) {
       return res.status(200).json({
         success: true,
-        accesotemporal: result.accesotemporal,
+        accesotemporal: result.accesotemporal, // valor crudo informativo
         user: result.user,
       });
     }

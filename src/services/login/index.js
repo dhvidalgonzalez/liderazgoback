@@ -35,7 +35,7 @@ function normalizeTxt(s) {
 function formatRutForApi(raw) {
   if (!raw) return raw;
   let s = raw.toString().trim().toUpperCase();
-  if (/^\d{1,3}(\.\d{3})*-[0-9K]$/.test(s)) return s; // ya correcto
+  if (/^\d{1,3}(\.\d{3})*-[0-9K]$/.test(s)) return s;
 
   if (/^\d{7,9}-[0-9K]$/.test(s)) {
     const [num, dv] = s.split("-");
@@ -61,6 +61,18 @@ function extractCode(detalle) {
     detalle.match(/cod(?:igo)?:\s*([A-Za-z0-9\-_]+)/i) ||
     detalle.match(/([A-Za-z0-9]{4,})$/);
   return m ? m[1] : null;
+}
+
+/**
+ * ✅ Normaliza la semántica real:
+ * - API devuelve accesotemporal = 0  => requiere cambio
+ * - API devuelve accesotemporal = 1  => ya cambió / acceso normal
+ */
+function needsPasswordChange(value) {
+  // Consideramos sólo "0" o 0 como requiere cambio. Todo lo demás => no requiere.
+  if (value === 0) return true;
+  if (typeof value === "string" && value.trim() === "0") return true;
+  return false;
 }
 
 // ============================================================
@@ -98,7 +110,6 @@ async function withTokenRetry(callback) {
     return await callback(tokenCache);
   } catch (err) {
     const detalle = err?.response?.data?.detalle || "";
-    // Si el backend indica token expirado/ inválido, pedimos uno nuevo y reintentamos una vez
     if (/token\s*expirado|inv[áa]lido/i.test(detalle)) {
       tokenCache = await getToken();
       return callback(tokenCache);
@@ -133,28 +144,44 @@ async function loginService(rut, clave) {
   );
 
   const remoteUser = response.data?.[0];
+  console.log("🚀 ~ loginService ~ remoteUser:", remoteUser);
   if (!remoteUser?.existecuenta) {
     const err = new Error("Cuenta no existe o sin acceso");
     err.status = 401;
     throw err;
   }
 
-  const localUser = await getOrCreateUserService({
-    rut: remoteUser.rutfull,
-    name: remoteUser.nombrefull,
-  });
+  // 👇 Regla correcta: 0 => requiere cambio; 1 => normal
+  const mustChange = needsPasswordChange(remoteUser?.accesotemporal);
+  console.log("🔎 accesotemporal:", remoteUser?.accesotemporal, "=> mustChange:", mustChange);
 
-  const payload = {
-    userId: localUser.id,
-    rut: remoteUser.rutfull,
-    nombre: remoteUser.nombrefull,
-    admin: remoteUser.admin,
-    perfiles: remoteUser.aplicacionDetalle || [],
-    nivelAcceso: remoteUser.idAdmNivelAcceso || [],
+  // 🔐 Solo emitimos token si NO requiere cambio
+  let token = null;
+  let localUser = null;
+  if (!mustChange) {
+    localUser = await getOrCreateUserService({
+      rut: remoteUser.rutfull,
+      name: remoteUser.nombrefull,
+    });
+
+    const payload = {
+      userId: localUser.id,
+      rut: remoteUser.rutfull,
+      nombre: remoteUser.nombrefull,
+      admin: remoteUser.admin,
+      perfiles: remoteUser.aplicacionDetalle || [],
+      nivelAcceso: remoteUser.idAdmNivelAcceso || [],
+    };
+
+    token = jwt.sign(payload, jwtSecret, { expiresIn: jwtExpiry });
+  }
+
+  return {
+    token,                  // null si debe cambiar
+    localUser,              // null si debe cambiar
+    remoteUser,
+    needsPasswordChange: mustChange, // ✅ bandera clara para el controller
   };
-
-  const token = jwt.sign(payload, jwtSecret, { expiresIn: jwtExpiry });
-  return { token, localUser, remoteUser };
 }
 
 // ============================================================
@@ -188,7 +215,6 @@ async function changePasswordService(rutInput) {
   console.log("📤 Solicitando código para:", rutfull);
 
   try {
-    // 1️⃣ Solicitar código
     const resp = await withTokenRetry((token) =>
       axios.post(`${apiBaseUrl}/ControlAcceso/CodigoSeguridad_Nuevo`, payload, {
         headers: {
@@ -212,7 +238,10 @@ async function changePasswordService(rutInput) {
     try {
       persona = await getCorreoVigente(rutfull);
     } catch (e) {
-      console.error("❌ Error obteniendo correo vigente:", e?.response?.data || e.message);
+      console.error(
+        "❌ Error obteniendo correo vigente:",
+        e?.response?.data || e.message
+      );
       return {
         success: false,
         reason: "email_failed",
@@ -239,7 +268,11 @@ async function changePasswordService(rutInput) {
     await sendEmail(to, subject, html);
     console.log("✅ Correo enviado correctamente a:", to);
 
-    return { success: true, mensaje: "Código enviado correctamente.", detalle: data.detalle };
+    return {
+      success: true,
+      mensaje: "Código enviado correctamente.",
+      detalle: data.detalle,
+    };
   } catch (err) {
     const status = err.response?.status || 500;
     const body = err.response?.data || {};
@@ -248,7 +281,6 @@ async function changePasswordService(rutInput) {
     console.error("[request-code] Error status:", status);
     console.error("[request-code] Error data:", body);
 
-    // 🧩 Si la API devuelve mensaje legible
     if (body?.mensaje || body?.detalle) {
       return {
         success: false,
@@ -259,7 +291,6 @@ async function changePasswordService(rutInput) {
       };
     }
 
-    // Código existente
     const detNorm = normalizeTxt(detalle);
     if (status === 409 || detNorm.includes("ya existe") || detNorm.includes("vigente")) {
       return {
@@ -303,12 +334,15 @@ async function validateTempPasswordService(rutInput, tempPassword) {
     );
 
     const data = resp?.data?.[0];
+    console.log("🚀 ~ validateTempPasswordService ~ data:", data);
     if (!data?.existecuenta) {
       return { valid: false, reason: "no_account" };
     }
 
     return {
       valid: true,
+      // aquí devolvemos el valor crudo por si lo quieres loguear, 
+      // pero la UI sólo necesita saber si validó o no.
       accesotemporal: data?.accesotemporal ?? null,
       user: {
         rutfull: data?.rutfull,
@@ -327,7 +361,6 @@ async function validateTempPasswordService(rutInput, tempPassword) {
 
 // ============================================================
 // 🔒 Finalizar cambio: actualizar contraseña definitiva
-//     (PerfilClave_Actualizar)
 // ============================================================
 async function updatePasswordService(rutInput, newPassword) {
   const rutfull = formatRutForApi(rutInput);
