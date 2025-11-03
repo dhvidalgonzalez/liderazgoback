@@ -1,33 +1,31 @@
-// src/routes/admin/justification/index.js
 const express = require("express");
 const {
   list,
   get,
   update,
   download,
+  exportExcel,
 } = require("../../../controllers/admin/justification");
 
 const router = express.Router();
 
-/**
- * 📦 Rutas base: /api/admin/justifications
- * - GET/POST listado (compat)
- * - GET detalle
- * - GET descarga de documento
- * - PUT estado (solo estado/comentarios del revisor)
- */
+/** Base: /api/admin/justification  (puedes montar también en plural si quieres) */
 
-// ✅ Listar con filtros + paginación (GET o POST)
-router.get("/", list);    // GET /admin/justifications
-router.post("/", list);   // POST /admin/justifications (compat)
+// Listado (GET/POST)
+router.get("/", list);
+router.post("/", list);
 
-// ✅ Descarga segura del documento (verifica archivo y MIME real)
-router.get("/:id/document", download); // GET /admin/justifications/:id/document
+// Exportar (soporta GET y POST; y tu FE usa POST)
+router.get("/export", exportExcel);
+router.post("/export", exportExcel);
+router.get("/export/excel", exportExcel);   // compat extra
+router.post("/export/excel", exportExcel);  // compat extra
 
-// ✅ Obtener por ID
-router.get("/:id", get);  // GET /admin/justifications/:id
+// Documento
+router.get("/:id/document", download);
 
-// ✅ Actualizar estado (⚠️ solo campos de revisión; NO documento)
-router.put("/:id/status", update); // PUT /admin/justifications/:id/status
+// Detalle y estado
+router.get("/:id", get);
+router.put("/:id/status", update);
 
 module.exports = router;

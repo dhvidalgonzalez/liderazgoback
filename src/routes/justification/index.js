@@ -11,9 +11,15 @@ const {
 
 const router = express.Router();
 
-// Compat: el middleware exporta default (upload) y props.
-// Aquí tomamos el default para no romper nada existente.
-const upload = require("../../middlewares/upload");
+/**
+ * Compatibilidad total con el middleware de uploads:
+ * - Si el módulo exporta `default`, lo usamos.
+ * - Si exporta la función directamente, también funciona.
+ * Además, preserva las props adicionales (UPLOADS_DIR, etc.) ya que require(...)
+ * retorna el objeto completo.
+ */
+const uploadModule = require("../../middlewares/upload");
+const upload = uploadModule?.default || uploadModule;
 
 // 🔹 GET /justification?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
 router.get("/", list);

@@ -13,6 +13,30 @@ const {
 const uploadUtils = require("../../middlewares/upload");
 const { UPLOADS_DIR, ALLOWED_MIME, detectMimeFromFileSync } = uploadUtils;
 
+/* ==========================
+ * Helpers filename seguros
+ * ========================== */
+
+function stripDiacritics(s) {
+  return String(s || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function toSafe(s) {
+  return stripDiacritics(s)
+    .replace(/[^\w\s.-]/g, "") // quita caracteres raros
+    .replace(/\s+/g, "_")      // espacios -> _
+    .replace(/_+/g, "_")       // colapsa múltiples _
+    .replace(/^_+|_+$/g, "")   // trim _
+    .toLowerCase();
+}
+
+function fmtDate(d) {
+  const dt = new Date(d);
+  const z = (n) => String(n).padStart(2, "0");
+  return isNaN(+dt) ? "fecha" : `${dt.getFullYear()}-${z(dt.getMonth() + 1)}-${z(dt.getDate())}`;
+}
 /**
  * 🔹 Lista todas las justificaciones del usuario autenticado
  *    (sin paginación, con filtro opcional de fechas)
@@ -59,13 +83,6 @@ async function get(req, res, next) {
 }
 
 /**
- * ✅ Sanitize filename to avoid path traversal (no slashes)
- */
-function sanitizeFilename(name) {
-  return String(name || "").replace(/[\/\\]+/g, "");
-}
-
-/**
  * 🔹 Crea una nueva justificación
  *    - Verifica archivo por firma binaria
  *    - Guarda documentFilename/documentMime + documentUrl (compat)
@@ -84,12 +101,11 @@ async function create(req, res, next) {
       // 2) Detección MIME real (firma binaria). Si no se reconoce, error.
       const detected = detectMimeFromFileSync(absPath);
       if (!detected) {
-        // limpiar archivo inválido
         try { fs.unlinkSync(absPath); } catch {}
         return res.status(400).json({ error: "Archivo inválido o corrupto" });
       }
 
-      // 3) Debe estar en lista permitida (config)
+      // 3) Debe estar en lista permitida
       if (!ALLOWED_MIME.has(detected)) {
         try { fs.unlinkSync(absPath); } catch {}
         return res.status(400).json({
@@ -123,7 +139,6 @@ async function create(req, res, next) {
       employeePosition,
       startDate: parsedStartDate,
       endDate: parsedEndDate,
-      // compat + nuevos:
       documentUrl,
       documentFilename,
       documentMime,
@@ -134,7 +149,6 @@ async function create(req, res, next) {
     return res.status(201).json(justification);
   } catch (err) {
     console.error("❌ Error en create controller:", err);
-    // Si algo falla y hay archivo, no lo dejamos huérfano
     if (file) {
       const absPath = path.resolve(UPLOADS_DIR, sanitizeFilename(file.filename));
       try { fs.unlinkSync(absPath); } catch {}
@@ -178,75 +192,66 @@ async function remove(req, res, next) {
 }
 
 /**
- * 🔽 Descarga segura del documento
- *  - Verifica existencia
- *  - Verifica firma binaria coincide con lo guardado
- *  - Sirve con cabeceras adecuadas
+ * 🔽 Descarga segura del documento (con nombre “bonito”)
  */
+// controllers/justification/index.js (fragmento)
+
+
 async function download(req, res, next) {
   try {
     const { id } = req.params;
     const j = await getJustificationService(id);
-
     if (!j) return res.status(404).json({ error: "Justificación no encontrada" });
 
     if (!j.documentFilename && !j.documentUrl) {
       return res.status(404).json({ error: "La justificación no tiene documento adjunto" });
     }
 
-    // Resolvemos nombre de archivo en disco
+    const sanitize = (s) => String(s || "").replace(/[\/\\]+/g, "");
+
+    // Resolver nombre físico en disco
     let filename = j.documentFilename;
     if (!filename && j.documentUrl) {
-      // /uploads/<nombre>
-      const base = String(j.documentUrl || "").split("/").pop();
-      filename = sanitizeFilename(base);
+      filename = sanitize(String(j.documentUrl).split("/").pop());
     }
-
     if (!filename) {
-      return res.status(404).json({ error: "No se pudo determinar el archivo del adjunto" });
+      return res.status(404).json({ error: "No se pudo determinar el archivo" });
     }
 
     const absPath = path.resolve(UPLOADS_DIR, filename);
-
-    // Chequeo de contención: el archivo debe estar DENTRO de UPLOADS_DIR
     if (!absPath.startsWith(path.resolve(UPLOADS_DIR))) {
       return res.status(400).json({ error: "Ruta inválida" });
     }
-
     if (!fs.existsSync(absPath)) {
       return res.status(404).json({ error: "Archivo no encontrado en servidor" });
     }
 
-    // Detectamos MIME real
-    const detected = detectMimeFromFileSync(absPath);
-    if (!detected) {
-      return res.status(415).json({ error: "No se pudo determinar el tipo del archivo (posible corrupción)" });
+    // ===== Nombre “bonito” desde la justificación =====
+    const baseRut   = toSafe(j.employeeRut || "rut");
+    const baseNom   = toSafe(j.employeeNombre || "trabajador");
+    const baseFecha = fmtDate(j.startDate || j.createdAt || Date.now());
+    const baseType  = toSafe(j.type || "doc");
+    const ext       = path.extname(absPath) || "";
+
+    const MAX = 150; // evita nombres larguísimos
+    let niceName = `justificacion_${baseRut}_${baseNom}_${baseFecha}_${baseType}${ext}`;
+    if (niceName.length > MAX) {
+      const stem = `justificacion_${baseRut}_${baseNom}`.slice(0, 60);
+      niceName = `${stem}_${baseFecha}_${baseType}${ext}`;
     }
 
-    // Si hay documentMime guardado, lo comparamos
-    if (j.documentMime && j.documentMime !== detected) {
-      return res.status(409).json({
-        error: "El tipo real del archivo no coincide con el registrado",
-        registrado: j.documentMime,
-        detectado: detected,
-      });
-    }
+    // Evitar compresión/interferencia y exponer headers para el frontend
+    res.setHeader("Content-Encoding", "identity");
+    res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+    res.setHeader("Access-Control-Expose-Headers", "Content-Disposition, Content-Type");
 
-    // Nombre de descarga legible (si tenemos employeeNombre/ type / fechas)
-    const downloadName =
-      `justificacion_${sanitizeFilename(j.employeeRut || "rut")}_${sanitizeFilename(j.type || "doc")}.${detected === "application/pdf" ? "pdf" : detected === "image/png" ? "png" : "jpg"}`;
-
-    res.setHeader("Content-Type", detected);
-    res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
-    const stat = fs.statSync(absPath);
-    res.setHeader("Content-Length", stat.size);
-
-    fs.createReadStream(absPath).pipe(res);
+    // Deja que Express maneje el stream y Content-Length
+    return res.download(absPath, niceName, (err) => err && next(err));
   } catch (err) {
-    console.error("❌ Error en download controller:", err);
     next(err);
   }
 }
+
 
 module.exports = {
   list,
@@ -254,5 +259,5 @@ module.exports = {
   create,
   update,
   remove,
-  download, // nuevo
+  download,
 };
