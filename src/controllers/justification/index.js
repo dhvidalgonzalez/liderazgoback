@@ -16,6 +16,9 @@ const { UPLOADS_DIR, ALLOWED_MIME, detectMimeFromFileSync } = uploadUtils;
 /* ==========================
  * Helpers filename seguros
  * ========================== */
+function sanitizeFilename(name) {
+  return String(name || "").replace(/[\/\\]+/g, "");
+}
 
 function stripDiacritics(s) {
   return String(s || "")
@@ -89,6 +92,7 @@ async function get(req, res, next) {
  */
 async function create(req, res, next) {
   const file = req.file;
+  console.log("🚀 ~ create ~ file:", file)
   try {
     let documentUrl = null;
     let documentFilename = null;
@@ -97,6 +101,7 @@ async function create(req, res, next) {
     if (file) {
       // 1) Ruta absoluta del archivo subido
       const absPath = path.resolve(UPLOADS_DIR, sanitizeFilename(file.filename));
+      console.log("🚀 ~ create ~ absPath:", absPath)
 
       // 2) Detección MIME real (firma binaria). Si no se reconoce, error.
       const detected = detectMimeFromFileSync(absPath);
@@ -144,6 +149,7 @@ async function create(req, res, next) {
       documentMime,
       creatorId: req.user.userId,
     };
+    console.log("🚀 ~ create ~ data:", data)
 
     const justification = await createJustificationService(data);
     return res.status(201).json(justification);
