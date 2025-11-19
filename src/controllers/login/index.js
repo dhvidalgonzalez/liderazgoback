@@ -58,6 +58,7 @@ function logout(req, res) {
     .json({ success: true, message: "Sesión cerrada exitosamente" });
 }
 
+
 // 🔁 Solicitar código de recuperación (envía correo)
 async function changePassword(req, res, next) {
   try {
@@ -68,37 +69,48 @@ async function changePassword(req, res, next) {
 
     const result = await changePasswordService(rut);
 
-    if (result.success) {
+    // 1) Caso éxito: código generado (proveedor respondió OK)
+    if (result?.success) {
       return res.status(200).json({
         success: true,
-        message: "Correo enviado con éxito",
+        codeAlreadySent: false,
+        message: result.detalle || "Correo enviado con éxito",
+        detalle: result.detalle,
+        vigencia: result.vigencia, // si el proveedor la entrega
       });
     }
 
-    if (result.reason === "codigo_existente") {
-      return res.status(409).json({
-        error: "Ya existe un código activo",
-        vigencia: result.vigencia,
+    // 2) Caso idempotente: YA EXISTE CÓDIGO vigente → 200 OK (no error)
+    // Asegúrate que tu service mapea el 400 del proveedor a reason="codigo_existente"
+    if (result?.reason === "codigo_existente") {
+      return res.status(200).json({
+        success: true,
+        codeAlreadySent: true,
+        message: "Ya existe un código vigente.",
+        detalle: result.detalle,     // p.ej. "Ya existe otro código de recuperación."
+        vigencia: result.vigencia,   // ej: "19-11-2025 13:22:30"
       });
     }
 
-    if (result.reason === "email_failed") {
+    // 3) Error al enviar correo (sin casilla o fallo SMTP)
+    if (result?.reason === "email_failed") {
       return res.status(502).json({
         error: "Error al enviar el correo",
-        detalle:
-          result.detalle || "Fallo al enviar el correo de recuperación",
+        detalle: result.detalle || "Fallo al enviar el correo de recuperación",
       });
     }
 
+    // 4) Desconocido
     return res.status(500).json({
       error: "No se pudo solicitar el código",
-      detalle: result.detalle || "Error desconocido",
+      detalle: result?.detalle || "Error desconocido",
     });
   } catch (err) {
-    console.error("❌ Error en controlador changePassword:", err.message);
+    console.error("❌ Error en controlador changePassword:", err?.message);
     return next(err);
   }
 }
+
 
 // ✅ Validar clave temporal (login con temporal)
 async function validateTempPassword(req, res, next) {

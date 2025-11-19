@@ -109,17 +109,23 @@ async function withTokenRetry(callback) {
   try {
     return await callback(tokenCache);
   } catch (err) {
-    const detalle = err?.response?.data?.detalle || "";
-    if (/token\s*expirado|inv[áa]lido/i.test(detalle)) {
+    const detalle = err?.response?.data?.detalle || err?.response?.data?.mensaje || "";
+    const st = err?.response?.status;
+
+    // Reintentar si token inválido/expirado (algunos back devuelven 401/403 o 400 con texto)
+    if (
+      st && (st === 401 || st === 403) ||
+      /token\s*expirado|inv[áa]lido/i.test(detalle)
+    ) {
       tokenCache = await getToken();
       return callback(tokenCache);
     }
-    const status = err.response?.status || 500;
-    const body = err.response?.data || {};
-    console.error("[APIUNI] Error:", status, body);
+
+    console.error("[APIUNI] Error:", st || 500, err?.response?.data || err.message);
     throw err;
   }
 }
+
 
 // ============================================================
 // 🔐 Login
@@ -238,10 +244,7 @@ async function changePasswordService(rutInput) {
     try {
       persona = await getCorreoVigente(rutfull);
     } catch (e) {
-      console.error(
-        "❌ Error obteniendo correo vigente:",
-        e?.response?.data || e.message
-      );
+      console.error("❌ Error obteniendo correo vigente:", e?.response?.data || e.message);
       return {
         success: false,
         reason: "email_failed",
@@ -272,43 +275,52 @@ async function changePasswordService(rutInput) {
       success: true,
       mensaje: "Código enviado correctamente.",
       detalle: data.detalle,
+      vigencia: data.vigencia || null, // <- propagamos si viene
     };
   } catch (err) {
     const status = err.response?.status || 500;
     const body = err.response?.data || {};
     const detalle = body?.detalle || body?.mensaje || err.message;
+    const detNorm = normalizeTxt(detalle);
 
     console.error("[request-code] Error status:", status);
     console.error("[request-code] Error data:", body);
 
-    if (body?.mensaje || body?.detalle) {
-      return {
-        success: false,
-        status,
-        mensaje: body?.mensaje || "Error",
-        detalle,
-        vigencia: body?.vigencia || null,
-      };
-    }
-
-    const detNorm = normalizeTxt(detalle);
-    if (status === 409 || detNorm.includes("ya existe") || detNorm.includes("vigente")) {
+    // 🟢 1) Caso idempotente (NO es error lógico)
+    //    API suele devolver 400 con "Ya existe otro código de recuperación" + vigencia
+    if (
+      status === 400 &&
+      ( /ya existe/.test(detNorm) || /vigent/.test(detNorm) ) // “vigente”
+    ) {
       return {
         success: false,
         reason: "codigo_existente",
-        detalle,
+        detalle: body?.detalle || detalle,
         vigencia: body?.vigencia || null,
       };
     }
 
+    // 🔴 2) Fallas de correo detectables (a veces API manda 400 “no hay correo”)
+    if (status === 400 && /correo/.test(detNorm)) {
+      return {
+        success: false,
+        reason: "email_failed",
+        detalle: body?.detalle || detalle,
+        status: 502,
+      };
+    }
+
+    // 🟠 3) Cualquier otro caso, lo mapeamos como error general
     return {
       success: false,
       status,
       reason: "error_general",
       detalle,
+      vigencia: body?.vigencia || null,
     };
   }
 }
+
 
 // ============================================================
 // ✅ Validar clave temporal (login con temporal)

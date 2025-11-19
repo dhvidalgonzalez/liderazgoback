@@ -1,6 +1,8 @@
 // controllers/justification/index.js
 const path = require("path");
 const fs = require("fs");
+const { Prisma } = require("@prisma/client");
+
 const {
   listJustificationsService,
   getJustificationService,
@@ -40,6 +42,70 @@ function fmtDate(d) {
   const z = (n) => String(n).padStart(2, "0");
   return isNaN(+dt) ? "fecha" : `${dt.getFullYear()}-${z(dt.getMonth() + 1)}-${z(dt.getDate())}`;
 }
+
+/* ==========================
+ * Normalizadores de datos
+ * ========================== */
+const normalizeRut = (rut) =>
+  rut ? String(rut).replace(/\./g, "").trim().toUpperCase() : "";
+
+const normalizeOptionalString = (value) => {
+  if (value === undefined || value === null) return null;
+  const s = String(value).trim();
+  return s === "" ? null : s;
+};
+
+const normalizeSapCode = (value) => {
+  // Acepta number | string | null | undefined => retorna string | null
+  if (value === undefined || value === null) return null;
+  const s = String(value).trim();
+  return s === "" ? null : s;
+};
+
+const normalizeRequiredString = (value, fieldName = "field") => {
+  const s = String(value ?? "").trim();
+  if (!s) throw new Error(`El campo ${fieldName} es obligatorio`);
+  return s;
+};
+
+const parseDateOrThrow = (value, fieldName) => {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) throw new Error(`Fecha inválida en ${fieldName}`);
+  return d;
+};
+
+/* ==========================
+ * Manejador de errores Prisma
+ * ========================== */
+function handleControllerError(err, res, next) {
+  if (err instanceof Prisma.PrismaClientValidationError) {
+    return res.status(400).json({
+      message: "Datos inválidos para Justification.",
+      type: "PrismaClientValidationError",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    if (err.code === "P2002") {
+      return res.status(409).json({
+        message: "Conflicto de datos (restricción única).",
+        type: "PrismaClientKnownRequestError",
+        code: err.code,
+        meta: err.meta,
+      });
+    }
+    return res.status(400).json({
+      message: "Error en la operación con base de datos.",
+      type: "PrismaClientKnownRequestError",
+      code: err.code,
+      meta: err.meta,
+    });
+  }
+
+  return next(err);
+}
+
 /**
  * 🔹 Lista todas las justificaciones del usuario autenticado
  *    (sin paginación, con filtro opcional de fechas)
@@ -62,7 +128,7 @@ async function list(req, res, next) {
     return res.json(justifications);
   } catch (err) {
     console.error("❌ Error en list controller:", err);
-    next(err);
+    handleControllerError(err, res, next);
   }
 }
 
@@ -81,7 +147,7 @@ async function get(req, res, next) {
     return res.json(justification);
   } catch (err) {
     console.error("❌ Error en get controller:", err);
-    next(err);
+    handleControllerError(err, res, next);
   }
 }
 
@@ -89,10 +155,10 @@ async function get(req, res, next) {
  * 🔹 Crea una nueva justificación
  *    - Verifica archivo por firma binaria
  *    - Guarda documentFilename/documentMime + documentUrl (compat)
+ *    - Normaliza campos snapshot del trabajador (incluye employeeSapCode)
  */
 async function create(req, res, next) {
   const file = req.file;
-  console.log("🚀 ~ create ~ file:", file)
   try {
     let documentUrl = null;
     let documentFilename = null;
@@ -101,7 +167,6 @@ async function create(req, res, next) {
     if (file) {
       // 1) Ruta absoluta del archivo subido
       const absPath = path.resolve(UPLOADS_DIR, sanitizeFilename(file.filename));
-      console.log("🚀 ~ create ~ absPath:", absPath)
 
       // 2) Detección MIME real (firma binaria). Si no se reconoce, error.
       const detected = detectMimeFromFileSync(absPath);
@@ -124,34 +189,64 @@ async function create(req, res, next) {
       documentUrl = `/uploads/${file.filename}`; // compat con frontend actual
     }
 
+    // Extraemos body y normalizamos
     const {
       file: _omitFile,
       startDate,
       endDate,
       employeePosition,
-      ...rest
-    } = req.body;
+      employeeRut,
+      employeeNombre,
+      employeeEmail,
+      employeeSapCode,
+      employeeGerencia,
+      employeeEmpresa,
+      type,
+      description,
+      ...rest // por compat futura
+    } = req.body || {};
 
-    const parsedStartDate = startDate ? new Date(startDate) : null;
-    const parsedEndDate = endDate ? new Date(endDate) : null;
-
-    if (!parsedStartDate || !parsedEndDate || isNaN(parsedStartDate) || isNaN(parsedEndDate)) {
-      return res.status(400).json({ error: "Fechas inválidas" });
+    // Fechas obligatorias
+    const parsedStartDate = parseDateOrThrow(startDate, "startDate");
+    const parsedEndDate = parseDateOrThrow(endDate, "endDate");
+    if (parsedEndDate < parsedStartDate) {
+      return res.status(400).json({ error: "endDate no puede ser anterior a startDate" });
     }
 
-    const data = {
-      ...rest,
-      employeePosition,
+    // Snapshot del trabajador (normalizado)
+    const normalizedPayload = {
+      ...rest, // por si el service usa campos extra (no romper compat)
+      employeeNombre: normalizeRequiredString(employeeNombre, "employeeNombre"),
+      employeeRut: normalizeRequiredString(normalizeRut(employeeRut), "employeeRut"),
+      employeeEmail: normalizeOptionalString(employeeEmail),
+      employeeSapCode: normalizeSapCode(employeeSapCode), // 👈 blindado
+      employeeGerencia: normalizeOptionalString(employeeGerencia),
+      employeeEmpresa: normalizeOptionalString(employeeEmpresa),
+      employeePosition: normalizeOptionalString(employeePosition),
+
+      // Datos de la justificación
       startDate: parsedStartDate,
       endDate: parsedEndDate,
+      type: normalizeRequiredString(type, "type"),
+      description: normalizeOptionalString(description),
+
+      // Documento adjunto
       documentUrl,
       documentFilename,
       documentMime,
-      creatorId: req.user.userId,
-    };
-    console.log("🚀 ~ create ~ data:", data)
 
-    const justification = await createJustificationService(data);
+      // Usuario creador
+      creatorId: req.user?.userId,
+    };
+
+    if (!normalizedPayload.creatorId) {
+      // mantengo tu validación suave (como en list)
+      return res.status(400).json({
+        error: "Token inválido o ausente (creatorId no disponible)",
+      });
+    }
+
+    const justification = await createJustificationService(normalizedPayload);
     return res.status(201).json(justification);
   } catch (err) {
     console.error("❌ Error en create controller:", err);
@@ -159,7 +254,7 @@ async function create(req, res, next) {
       const absPath = path.resolve(UPLOADS_DIR, sanitizeFilename(file.filename));
       try { fs.unlinkSync(absPath); } catch {}
     }
-    next(err);
+    handleControllerError(err, res, next);
   }
 }
 
@@ -179,7 +274,7 @@ async function update(req, res, next) {
     return res.json(justification);
   } catch (err) {
     console.error("❌ Error en update controller:", err);
-    next(err);
+    handleControllerError(err, res, next);
   }
 }
 
@@ -193,16 +288,13 @@ async function remove(req, res, next) {
     return res.status(204).end();
   } catch (err) {
     console.error("❌ Error en remove controller:", err);
-    next(err);
+    handleControllerError(err, res, next);
   }
 }
 
 /**
  * 🔽 Descarga segura del documento (con nombre “bonito”)
  */
-// controllers/justification/index.js (fragmento)
-
-
 async function download(req, res, next) {
   try {
     const { id } = req.params;
@@ -254,10 +346,9 @@ async function download(req, res, next) {
     // Deja que Express maneje el stream y Content-Length
     return res.download(absPath, niceName, (err) => err && next(err));
   } catch (err) {
-    next(err);
+    handleControllerError(err, res, next);
   }
 }
-
 
 module.exports = {
   list,

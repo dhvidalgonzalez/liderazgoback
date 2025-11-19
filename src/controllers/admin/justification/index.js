@@ -227,19 +227,21 @@ async function exportExcel(req, res) {
     const ws = wb.addWorksheet("Justificaciones");
 
     ws.columns = [
-      { header: "ID",                   key: "id", width: 36 },
-      { header: "Creado",               key: "createdAt", width: 18 },
-      { header: "Inicio",               key: "startDate", width: 18 },
+      // 👇 Prioridad al inicio
       { header: "Término",              key: "endDate", width: 18 },
       { header: "Estado",               key: "status", width: 14 },
       { header: "Tipo",                 key: "type", width: 18 },
-
       { header: "Trabajador Nombre",    key: "employeeNombre", width: 28 },
+      { header: "Trabajador Gerencia",  key: "employeeGerencia", width: 22 },
+      { header: "Trabajador Empresa",   key: "employeeEmpresa", width: 22 },
+
+      // 👇 Resto de columnas al final (mismas que ya tenías)
+      { header: "ID",                   key: "id", width: 36 },
+      { header: "Creado",               key: "createdAt", width: 18 },
+      { header: "Inicio",               key: "startDate", width: 18 },
       { header: "Trabajador RUT",       key: "employeeRut", width: 16 },
       { header: "Trabajador Email",     key: "employeeEmail", width: 28 },
       { header: "Trabajador SAP",       key: "employeeSapCode", width: 16 },
-      { header: "Trabajador Gerencia",  key: "employeeGerencia", width: 22 },
-      { header: "Trabajador Empresa",   key: "employeeEmpresa", width: 22 },
       { header: "Trabajador Cargo",     key: "employeePosition", width: 22 },
 
       { header: "EmployeeProfile ID",   key: "employeeProfileId", width: 36 },
@@ -256,7 +258,9 @@ async function exportExcel(req, res) {
 
       { header: "Creador ID",           key: "creatorId", width: 36 },
     ];
+
     ws.getRow(1).font = { bold: true };
+
 
     for (const j of rows) {
       ws.addRow({

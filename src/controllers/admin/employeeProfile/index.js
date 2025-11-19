@@ -1,4 +1,4 @@
-const { 
+const {
   listEmployeeProfilesService,
   getEmployeeProfileService,
   getEmployeeProfileByRutService,
@@ -8,6 +8,8 @@ const {
   upsertEmployeeProfileByRutService, // 👈 nuevo
 } = require("../../../services/admin/employeeProfile");
 
+const { Prisma } = require("@prisma/client");
+
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 100;
 
@@ -15,6 +17,56 @@ const normalizeRut = (rut) =>
   rut ? String(rut).replace(/\./g, "").trim().toUpperCase() : "";
 
 const todayISO = () => new Date().toISOString().split("T")[0];
+
+// Normalizar sapCode: acepta number/string/null/undefined y devuelve String o null
+const normalizeSapCode = (value) => {
+  if (value === undefined || value === null) return null;
+  const s = String(value).trim();
+  return s === "" ? null : s;
+};
+
+// (opcional) normalizar strings opcionales
+const normalizeOptionalString = (value) => {
+  if (value === undefined || value === null) return null;
+  const s = String(value).trim();
+  return s === "" ? null : s;
+};
+
+// ─────────────────────────────────────────────
+// Helper: manejador centralizado de errores
+// ─────────────────────────────────────────────
+function handleControllerError(err, res, next) {
+  // Errores de validación de Prisma (tipos incorrectos, etc.)
+  if (err instanceof Prisma.PrismaClientValidationError) {
+    return res.status(400).json({
+      message: "Datos inválidos para EmployeeProfile.",
+      type: "PrismaClientValidationError",
+      detail: err.message,
+    });
+  }
+
+  // Errores conocidos de Prisma (unique, etc.)
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    if (err.code === "P2002") {
+      return res.status(409).json({
+        message: "Conflicto de datos (violación de restricción única).",
+        type: "PrismaClientKnownRequestError",
+        code: err.code,
+        meta: err.meta,
+      });
+    }
+
+    return res.status(400).json({
+      message: "Error en la operación con base de datos.",
+      type: "PrismaClientKnownRequestError",
+      code: err.code,
+      meta: err.meta,
+    });
+  }
+
+  // Cualquier otro error lo dejamos al middleware global
+  return next(err);
+}
 
 // 📋 Listar (paginado)
 async function list(req, res, next) {
@@ -41,7 +93,8 @@ async function list(req, res, next) {
       pageSize: parsedPageSize,
       search: String(q || "").trim(),
       sortBy: String(sortBy || "name"),
-      sortOrder: String(sortOrder || "asc").toLowerCase() === "desc" ? "desc" : "asc",
+      sortOrder:
+        String(sortOrder || "asc").toLowerCase() === "desc" ? "desc" : "asc",
       filters: {
         isActive:
           typeof isActive === "string"
@@ -58,7 +111,7 @@ async function list(req, res, next) {
 
     res.json(result); // { data, pagination }
   } catch (err) {
-    next(err);
+    handleControllerError(err, res, next);
   }
 }
 
@@ -74,7 +127,7 @@ async function get(req, res, next) {
 
     res.json(employee);
   } catch (err) {
-    next(err);
+    handleControllerError(err, res, next);
   }
 }
 
@@ -84,20 +137,24 @@ async function getByRut(req, res, next) {
     const { rut } = req.params;
 
     if (!rut) {
-      return res.status(400).json({ message: "Debe proporcionar un RUT válido" });
+      return res
+        .status(400)
+        .json({ message: "Debe proporcionar un RUT válido" });
     }
 
     const rutNorm = normalizeRut(rut);
     const employee = await getEmployeeProfileByRutService(rutNorm);
-    console.log("🚀 ~ getByRut ~ employee:", employee)
+    console.log("🚀 ~ getByRut ~ employee:", employee);
 
     if (!employee) {
-      return res.status(404).json({ message: "Empleado no encontrado con ese RUT" });
+      return res
+        .status(404)
+        .json({ message: "Empleado no encontrado con ese RUT" });
     }
 
     res.json(employee);
   } catch (err) {
-    next(err);
+    handleControllerError(err, res, next);
   }
 }
 
@@ -118,19 +175,19 @@ async function create(req, res, next) {
     } = req.body;
 
     if (!rut || !name || !startDate || !endDate) {
-      return res
-        .status(400)
-        .json({ message: "Los campos rut, name, startDate y endDate son obligatorios" });
+      return res.status(400).json({
+        message: "Los campos rut, name, startDate y endDate son obligatorios",
+      });
     }
 
     const newEmployee = await createEmployeeProfileService({
       rut: normalizeRut(rut),
       name,
-      email,
-      sapCode,
-      gerencia,
-      empresa,
-      position,
+      email: normalizeOptionalString(email),
+      sapCode: normalizeSapCode(sapCode), // 👈 aquí blindamos el tipo
+      gerencia: normalizeOptionalString(gerencia),
+      empresa: normalizeOptionalString(empresa),
+      position: normalizeOptionalString(position),
       startDate,
       endDate,
       isActive,
@@ -138,7 +195,7 @@ async function create(req, res, next) {
 
     res.status(201).json(newEmployee);
   } catch (err) {
-    next(err);
+    handleControllerError(err, res, next);
   }
 }
 
@@ -156,10 +213,31 @@ async function update(req, res, next) {
     const updatedEmployee = await updateEmployeeProfileService(id, {
       ...data,
       rut: data?.rut ? normalizeRut(data.rut) : employeeExists.rut,
+      sapCode:
+        data && Object.prototype.hasOwnProperty.call(data, "sapCode")
+          ? normalizeSapCode(data.sapCode)
+          : employeeExists.sapCode,
+      email:
+        data && Object.prototype.hasOwnProperty.call(data, "email")
+          ? normalizeOptionalString(data.email)
+          : employeeExists.email,
+      gerencia:
+        data && Object.prototype.hasOwnProperty.call(data, "gerencia")
+          ? normalizeOptionalString(data.gerencia)
+          : employeeExists.gerencia,
+      empresa:
+        data && Object.prototype.hasOwnProperty.call(data, "empresa")
+          ? normalizeOptionalString(data.empresa)
+          : employeeExists.empresa,
+      position:
+        data && Object.prototype.hasOwnProperty.call(data, "position")
+          ? normalizeOptionalString(data.position)
+          : employeeExists.position,
     });
+
     res.json(updatedEmployee);
   } catch (err) {
-    next(err);
+    handleControllerError(err, res, next);
   }
 }
 
@@ -180,9 +258,9 @@ async function upsertByRut(req, res, next) {
     } = req.body || {};
 
     if (!rut || !name) {
-      return res
-        .status(400)
-        .json({ message: "Los campos rut y name son obligatorios para upsert." });
+      return res.status(400).json({
+        message: "Los campos rut y name son obligatorios para upsert.",
+      });
     }
 
     const rutNorm = normalizeRut(rut);
@@ -195,11 +273,11 @@ async function upsertByRut(req, res, next) {
     const saved = await upsertEmployeeProfileByRutService({
       rut: rutNorm,
       name,
-      email,
-      sapCode,
-      gerencia,
-      empresa,
-      position,
+      email: normalizeOptionalString(email),
+      sapCode: normalizeSapCode(sapCode), // 👈 otra vez blindado
+      gerencia: normalizeOptionalString(gerencia),
+      empresa: normalizeOptionalString(empresa),
+      position: normalizeOptionalString(position),
       startDate: _start,
       endDate: _end,
       isActive: typeof isActive === "boolean" ? isActive : true,
@@ -207,7 +285,7 @@ async function upsertByRut(req, res, next) {
 
     res.status(200).json(saved);
   } catch (err) {
-    next(err);
+    handleControllerError(err, res, next);
   }
 }
 
@@ -223,7 +301,7 @@ async function remove(req, res, next) {
     await deleteEmployeeProfileService(id);
     res.status(204).end();
   } catch (err) {
-    next(err);
+    handleControllerError(err, res, next);
   }
 }
 
