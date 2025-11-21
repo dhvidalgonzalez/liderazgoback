@@ -1,17 +1,30 @@
-// src/services/admin/justification/index.js
 const prisma = require("../../../db/client");
+
+/** 🔢 Helper interno por si alguien llama el servicio con page/pageSize "raros" */
+function toIntOrDefault(value, def) {
+  if (value === undefined || value === null || value === "") return def;
+  const n = parseInt(value, 10);
+  if (Number.isNaN(n) || !Number.isFinite(n)) return def;
+  return n;
+}
 
 /**
  * 🔹 Lista justificaciones con filtros + paginación/orden/búsqueda
  */
 async function listJustificationsService(params = {}) {
-  const {
+  let {
     filters = {},
     page = 1,
     pageSize = 10,
     sortBy = "createdAt",
     sortOrder = "desc",
   } = params;
+
+  // 🛡️ Blindaje suave de paginación (por si viene string o NaN desde otro caller)
+  page = toIntOrDefault(page, 1);
+  pageSize = toIntOrDefault(pageSize, 10);
+  if (page <= 0) page = 1;
+  if (pageSize <= 0) pageSize = 10;
 
   const { type, status, createdAtStart, createdAtEnd, search } = filters;
 
@@ -72,6 +85,8 @@ async function listJustificationsService(params = {}) {
     include: {
       reviewer: { select: { id: true, name: true, email: true } },
       employeeProfile: { select: { id: true, name: true, empresa: true } },
+      // 🆕 Creador: para poder mostrar su nombre/RUT en app y Excel
+      creator: { select: { id: true, name: true, rut: true, email: true } },
     },
   });
 
@@ -99,6 +114,8 @@ async function getJustificationService(id) {
     include: {
       reviewer: { select: { id: true, name: true, email: true } },
       employeeProfile: true,
+      // 🆕 También traemos creator aquí por si lo necesitas en el detalle
+      creator: { select: { id: true, name: true, rut: true, email: true } },
     },
   });
 }
