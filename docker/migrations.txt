@@ -1,0 +1,108 @@
+BEGIN;
+
+INSERT INTO "User"(id,rut,name,email,password,role,"createdAt","updatedAt")
+VALUES
+  -- pega aquí las filas
+;
+
+COMMIT;
+
+BEGIN;
+
+INSERT INTO "EmployeeProfile"(id,rut,name,email,"sapCode",gerencia,empresa,position,"startDate","endDate","isActive","createdAt","updatedAt")
+VALUES
+  -- pega aquí las filas
+;
+
+COMMIT;
+
+
+BEGIN;
+
+INSERT INTO "Justification"(
+  id,
+  "employeeNombre","employeeRut","employeeEmail","employeeSapCode","employeeGerencia","employeeEmpresa","employeePosition",
+  "employeeProfileId",
+  "startDate","endDate",type,description,
+  "documentUrl","documentFilename","documentMime",
+  status,"reviewedAt",
+  "creatorId","reviewerId","reviewerCause","reviewerComment",
+  "createdAt","updatedAt"
+)
+VALUES
+  -- pega aquí las filas
+;
+
+COMMIT;
+
+
+
+
+
+SELECT
+  '(' +
+  '''' + CAST(id AS varchar(36)) + ''',' +
+  '''' + REPLACE(rut,'''','''''') + ''',' +
+  '''' + REPLACE(name,'''','''''') + ''',' +
+  COALESCE('''' + REPLACE(email,'''','''''') + '''', 'NULL') + ',' +
+  COALESCE('''' + REPLACE(password,'''','''''') + '''', 'NULL') + ',' +
+  '''' + REPLACE(role,'''','''''') + ''',' +
+  '''' + CONVERT(varchar(33), createdAt, 126) + ''',' +
+  '''' + CONVERT(varchar(33), updatedAt, 126) + '''' +
+  '),' AS values_line
+FROM dbo.[User]
+ORDER BY id;
+
+
+
+
+SELECT
+  '(' +
+  '''' + CAST(id AS varchar(36)) + ''',' +
+  '''' + REPLACE(rut,'''','''''') + ''',' +
+  '''' + REPLACE(name,'''','''''') + ''',' +
+  COALESCE('''' + REPLACE(email,'''','''''') + '''', 'NULL') + ',' +
+  COALESCE('''' + REPLACE(sapCode,'''','''''') + '''', 'NULL') + ',' +
+  COALESCE('''' + REPLACE(gerencia,'''','''''') + '''', 'NULL') + ',' +
+  COALESCE('''' + REPLACE(empresa,'''','''''') + '''', 'NULL') + ',' +
+  COALESCE('''' + REPLACE(position,'''','''''') + '''', 'NULL') + ',' +
+  '''' + CONVERT(varchar(33), startDate, 126) + ''',' +
+  '''' + CONVERT(varchar(33), endDate, 126) + ''',' +
+  CASE WHEN isActive = 1 THEN 'true' ELSE 'false' END + ',' +
+  '''' + CONVERT(varchar(33), createdAt, 126) + ''',' +
+  '''' + CONVERT(varchar(33), updatedAt, 126) + '''' +
+  '),' AS values_line
+FROM dbo.EmployeeProfile
+ORDER BY id;
+
+
+
+SELECT
+  '(' +
+  '''' + CAST(id AS varchar(36)) + ''',' +
+  '''' + REPLACE(employeeNombre,'''','''''') + ''',' +
+  '''' + REPLACE(employeeRut,'''','''''') + ''',' +
+  '''' + REPLACE(employeeEmail,'''','''''') + ''',' +
+  COALESCE('''' + REPLACE(employeeSapCode,'''','''''') + '''', 'NULL') + ',' +
+  COALESCE('''' + REPLACE(employeeGerencia,'''','''''') + '''', 'NULL') + ',' +
+  COALESCE('''' + REPLACE(employeeEmpresa,'''','''''') + '''', 'NULL') + ',' +
+  COALESCE('''' + REPLACE(employeePosition,'''','''''') + '''', 'NULL') + ',' +
+  '''' + CAST(employeeProfileId AS varchar(36)) + ''',' +
+  '''' + CONVERT(varchar(33), startDate, 126) + ''',' +
+  '''' + CONVERT(varchar(33), endDate, 126) + ''',' +
+  '''' + REPLACE(type,'''','''''') + ''',' +
+  COALESCE('''' + REPLACE(description,'''','''''') + '''', 'NULL') + ',' +
+  COALESCE('''' + REPLACE(documentUrl,'''','''''') + '''', 'NULL') + ',' +
+  COALESCE('''' + REPLACE(documentFilename,'''','''''') + '''', 'NULL') + ',' +
+  COALESCE('''' + REPLACE(documentMime,'''','''''') + '''', 'NULL') + ',' +
+  '''' + REPLACE(status,'''','''''') + ''',' +
+  COALESCE('''' + CONVERT(varchar(33), reviewedAt, 126) + '''', 'NULL') + ',' +
+  '''' + CAST(creatorId AS varchar(36)) + ''',' +
+  COALESCE('''' + CAST(reviewerId AS varchar(36)) + '''', 'NULL') + ',' +
+  COALESCE('''' + REPLACE(reviewerCause,'''','''''') + '''', 'NULL') + ',' +
+  COALESCE('''' + REPLACE(reviewerComment,'''','''''') + '''', 'NULL') + ',' +
+  '''' + CONVERT(varchar(33), createdAt, 126) + ''',' +
+  '''' + CONVERT(varchar(33), updatedAt, 126) + '''' +
+  '),' AS values_line
+FROM dbo.Justification
+ORDER BY id;

@@ -1,9 +1,8 @@
 generator client {
   provider = "prisma-client-js"
 }
-
 datasource db {
-  provider = "sqlserver"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -79,4 +78,5 @@ model Justification {
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
 }

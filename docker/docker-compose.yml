@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:17
+    container_name: liderazgo-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: liderazgo
+    ports:
+      - "5433:5432"
+    volumes:
+      - liderazgo_pg:/var/lib/postgresql/data
+
+volumes:
+  liderazgo_pg:
