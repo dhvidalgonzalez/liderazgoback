@@ -20,6 +20,8 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const allowedOrigins = [
   "http://localhost:3003",          // desarrollo local
   "https://appdetdesa.codelco.cl",  // dominio de producción (reverse proxy)
+  "https://10.18.19.27",
+  "http://10.18.19.27",
 ];
 
 // ============================================================

@@ -49,4 +49,28 @@ npx prisma migrate deploy
 pm2 restart <numero de proceso o nombre del proceso>
 
 
+cd ~/proyectos/Liderazgo/liderazgoback
+npm install
+tar -czvf liderazgoback.tar.gz liderazgoback
+tar -czvf liderazgoback_12_01_2025_3.tar.gz liderazgoback
 
+EN PPRODUCCION CORRER EL GENERADOR DEL CLEINTE PRISMA
+sudo -u backend -H bash -lc 'npx prisma generate'
+ 
+  382  sudo find /var/www/hormigones -type d -exec chmod 750 {} \;
+
+  383  sudo find /var/www/hormigones -type f -exec chmod 640 {} \;
+
+
+scp .\liderazgo_front_14_01_2026.tar.gz dvidal@10.18.19.27:/home/dvidal/
+ 
+Pedir a Arquitecto que replique en su ambiente paralelo.
+-> # (opcional) generar cliente con verison de prisma adecuada
+npx prisma generate.
+
+Tener estos permisos para la base de datos
+liderazgo_db=# GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public."User" TO adminuser;
+
+liderazgo_db=# GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public."Justification" TO adminuser;
+GRANT
+liderazgo_db=# GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public."EmployeeProfile" TO adminuser;
