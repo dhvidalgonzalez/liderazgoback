@@ -219,6 +219,7 @@ async function getToken() {
       httpsAgent,
     }
   );
+  console.log("🚀 ~ getToken ~ res:", res)
 
   tokenCache = res.data?.token || null;
   console.log("✅ Token obtenido:", tokenCache);
@@ -269,6 +270,7 @@ async function loginService(rut, clave) {
 
   async function doLogin(usuario) {
     const loginPayload = { usuario, clave, aplicacion };
+    console.log("🚀 ~ doLogin ~ loginPayload:", loginPayload)
 
     return withTokenRetry((token) =>
       axios.post(`${apiBaseUrl}/ControlAcceso/Login`, loginPayload, {
@@ -338,6 +340,7 @@ async function loginService(rut, clave) {
   // solo creamos/emitimos token si NO requiere cambio
   if (!mustChange) {
     try {
+      console.log("🚀 ~ loginService ~ localUser:", localUser)
       localUser = await getOrCreateUserService({
         rut: remoteUser.rutfull,
         name: remoteUser.nombrefull,
