@@ -1,3 +1,4 @@
+const jwt = require("jsonwebtoken");
 const {
   loginService,
   changePasswordService,
@@ -5,12 +6,100 @@ const {
   updatePasswordService,
 } = require("../../services/login");
 
+// =========================
+// Helpers login dummy
+// =========================
+function getLoginMode() {
+  return (process.env.LOGIN_MODE || "real").toLowerCase();
+}
+
+function isDummyLoginEnabled() {
+  const mode = getLoginMode();
+  return mode === "dev" || mode === "prod" || mode === "dummy";
+}
+
+function getJwtSecret() {
+  return process.env.JWT_SECRET || "dummy-dev-secret";
+}
+
+function buildDummyUser(req) {
+  const mode = getLoginMode();
+  const body = req.body || {};
+
+  return {
+    rut: body?.rut || "11111111-1",
+    rutfull: body?.rut || "11111111-1",
+    nombre: mode === "prod" ? "Usuario Dummy Producción" : "Usuario Dummy Desarrollo",
+    nombrefull:
+      mode === "prod" ? "Usuario Dummy Producción" : "Usuario Dummy Desarrollo",
+    correo:
+      mode === "prod"
+        ? "dummy-prod@local.test"
+        : "dummy-dev@local.test",
+    perfil:
+      mode === "prod"
+        ? "prod"
+        : "dev",
+    accesotemporal: 1,
+    dummyLogin: true,
+  };
+}
+
+function buildDummyToken(user) {
+  const mode = getLoginMode();
+
+  const payload = {
+    sub: user.rut,
+    rut: user.rut,
+    rutfull: user.rutfull,
+    nombre: user.nombre,
+    nombrefull: user.nombrefull,
+    perfil: user.perfil,
+    dummyLogin: true,
+    loginMode: mode,
+  };
+
+  return jwt.sign(payload, getJwtSecret(), {
+    expiresIn: "2h",
+  });
+}
+
+function setAuthCookie(res, token) {
+  const isProduction = process.env.NODE_ENV === "production";
+  res.cookie("token", token, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "Lax",
+    maxAge: 2 * 60 * 60 * 1000, // 2h
+  });
+}
+
 // 🔐 Iniciar sesión
 async function login(req, res, next) {
   try {
     const { rut, clave } = req.body;
+
     if (!rut || !clave) {
       return res.status(400).json({ error: "RUT y clave son requeridos" });
+    }
+
+    // =========================
+    // Login dummy por flag
+    // LOGIN_MODE=real -> login real
+    // LOGIN_MODE=dev/prod/dummy -> login dummy
+    // =========================
+    if (isDummyLoginEnabled()) {
+      const dummyUser = buildDummyUser(req);
+      const token = buildDummyToken(dummyUser);
+
+      setAuthCookie(res, token);
+
+      return res.status(200).json({
+        success: true,
+        dummyLogin: true,
+        mode: getLoginMode(),
+        user: dummyUser,
+      });
     }
 
     const result = await loginService(rut, clave);
@@ -31,13 +120,7 @@ async function login(req, res, next) {
 
     // flujo normal
     const { token } = result;
-    const isProduction = process.env.NODE_ENV === "production";
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: "Lax",
-      maxAge: 2 * 60 * 60 * 1000, // 2h
-    });
+    setAuthCookie(res, token);
 
     return res.status(200).json({ success: true });
   } catch (err) {
@@ -58,7 +141,6 @@ function logout(req, res) {
     .json({ success: true, message: "Sesión cerrada exitosamente" });
 }
 
-
 // 🔁 Solicitar código de recuperación (envía correo)
 async function changePassword(req, res, next) {
   try {
@@ -76,23 +158,22 @@ async function changePassword(req, res, next) {
         codeAlreadySent: false,
         message: result.detalle || "Correo enviado con éxito",
         detalle: result.detalle,
-        vigencia: result.vigencia, // si el proveedor la entrega
+        vigencia: result.vigencia,
       });
     }
 
-    // 2) Caso idempotente: YA EXISTE CÓDIGO vigente → 200 OK (no error)
-    // Asegúrate que tu service mapea el 400 del proveedor a reason="codigo_existente"
+    // 2) Caso idempotente: YA EXISTE CÓDIGO vigente → 200 OK
     if (result?.reason === "codigo_existente") {
       return res.status(200).json({
         success: true,
         codeAlreadySent: true,
         message: "Ya existe un código vigente.",
-        detalle: result.detalle,     // p.ej. "Ya existe otro código de recuperación."
-        vigencia: result.vigencia,   // ej: "19-11-2025 13:22:30"
+        detalle: result.detalle,
+        vigencia: result.vigencia,
       });
     }
 
-    // 3) Error al enviar correo (sin casilla o fallo SMTP)
+    // 3) Error al enviar correo
     if (result?.reason === "email_failed") {
       return res.status(502).json({
         error: "Error al enviar el correo",
@@ -111,7 +192,6 @@ async function changePassword(req, res, next) {
   }
 }
 
-
 // ✅ Validar clave temporal (login con temporal)
 async function validateTempPassword(req, res, next) {
   try {
@@ -127,7 +207,7 @@ async function validateTempPassword(req, res, next) {
     if (result.valid) {
       return res.status(200).json({
         success: true,
-        accesotemporal: result.accesotemporal, // valor crudo informativo
+        accesotemporal: result.accesotemporal,
         user: result.user,
       });
     }
